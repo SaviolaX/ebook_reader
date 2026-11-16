@@ -10,3 +10,20 @@ wheels/
 .venv
 
 *.spec
+
+# PyInstaller
+
+# Tools and editors
+.idea/
+.vscode/
+.ruff_cache/
+.pytest_cache/
+
+# OS files
+Thumbs.db
+desktop.ini
+
+# Local test books
+*.epub
+*.fb2
+*.fb2.zip
