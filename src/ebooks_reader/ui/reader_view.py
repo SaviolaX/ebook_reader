@@ -86,6 +86,28 @@ class ReaderView(QTextBrowser):
         t = self.typography
         self.setFont(QFont(t.family, t.size))
         self.document().setDocumentMargin(t.margin)
+        self.document().setDefaultStyleSheet(self._heading_css(t))
+
+    @staticmethod
+    def _heading_css(t: Typography) -> str:
+        # (tag, size relative to body text, centered)
+        levels = [
+            ("h1", 2.0, True),
+            ("h2", 1.6, True),
+            ("h3", 1.35, True),
+            ("h4", 1.2, False),
+            ("h5", 1.1, False),
+            ("h6", 1.05, False),
+        ]
+        rules = []
+        for tag, scale, centered in levels:
+            align = "center" if centered else "left"
+            rules.append(
+                f"{tag} {{ font-size: {t.size * scale:.1f}pt; font-weight: bold; "
+                f"text-align: {align}; margin-top: {int(t.size * scale)}px; "
+                f"margin-bottom: {int(t.size * 0.8)}px; }}"
+            )
+        return "\n".join(rules)
 
     def _apply_line_height(self) -> None:
         cur = QTextCursor(self.document())
