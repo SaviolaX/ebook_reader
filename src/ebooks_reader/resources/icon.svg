@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="56" fill="#2b3a55"/>
+  <!-- pages -->
+  <path d="M128 78 C104 62 70 60 48 68 V188 C70 180 104 182 128 198 Z" fill="#f4ecd8"/>
+  <path d="M128 78 C152 62 186 60 208 68 V188 C186 180 152 182 128 198 Z" fill="#e6dcc0"/>
+  <!-- spine -->
+  <path d="M128 78 V198" stroke="#2b3a55" stroke-width="4"/>
+  <!-- text lines, left page -->
+  <g fill="none" stroke="#b9ab8a" stroke-width="5" stroke-linecap="round">
+    <path d="M66 96 C82 93 98 95 112 101"/>
+    <path d="M66 116 C82 113 98 115 112 121"/>
+    <path d="M66 136 C82 133 98 135 112 141"/>
+    <path d="M66 156 C82 153 98 155 112 161"/>
+  </g>
+  <!-- text lines, right page -->
+  <g fill="none" stroke="#b9ab8a" stroke-width="5" stroke-linecap="round">
+    <path d="M144 101 C158 95 174 93 190 96"/>
+    <path d="M144 121 C158 115 174 113 190 116"/>
+    <path d="M144 141 C158 135 174 133 190 136"/>
+  </g>
+  <!-- bookmark ribbon -->
+  <path d="M168 66 V104 L178 95 L188 104 V64 Z" fill="#d9534f"/>
+</svg>
