@@ -10,6 +10,11 @@ THEMES = {
     "Sepia": ("#f4ecd8", "#5b4636"),
     "Dark": ("#1e1e1e", "#d4d4d4"),
     "Night (black)": ("#000000", "#9a9a9a"),
+    "Paper": ("#f5f1e6", "#2b2b2b"),
+    "Soft Gray": ("#e6e6e6", "#2a2a2a"),
+    "Eye Green": ("#c7edcc", "#2e3a2f"),
+    "Charcoal": ("#2b2b2b", "#cccccc"),
+    "Warm Night": ("#1c1a17", "#c9bfae"),
 }
 DEFAULT_THEME = "Light"
 
