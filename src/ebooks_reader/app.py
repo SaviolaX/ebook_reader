@@ -22,7 +22,10 @@ def run() -> None:
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setOrganizationName("EbooksReader")
-    app.setApplicationName("EbooksReader")
+    import os
+    app.setApplicationName(
+        "EbooksReaderTest" if os.environ.get("EBR_FRESH") else "EbooksReader"
+    )
     app.setWindowIcon(QIcon(str(ICON_PATH)))  # applies to every window
 
     win = MainWindow()
