@@ -7,7 +7,9 @@ Version 0.1.0. Currently supports **EPUB**; the code is structured so more forma
 
 - Continuous scrolling view of the whole book, with images
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
-- Color schemes: Light, Sepia, Dark, Night, plus custom background and text colors
+- 9 built-in color schemes for reading: Light, Sepia, Dark, Night (black), Paper, Soft Gray, Eye Green, Charcoal, Warm Night
+- Theme editor: create your own schemes (name, background, text) with a live preview
+- Share a color scheme with a friend by copying and pasting a short code
 - Text settings: font, font size, line spacing, page margins
 - Book links (footnotes, cross-references) open in a separate window, so you keep your place in the main text
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
@@ -40,7 +42,8 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Show/hide contents | `View → Show contents` (`F9`) |
 | Text settings | `View → Text settings...` (`Ctrl+T`) |
 | Larger / smaller font | `Ctrl+=` / `Ctrl+-` |
-| Change colors | `Theme` menu (presets or custom colors) |
+| Change colors | `Theme` menu (built-in and your own schemes) |
+| Create or edit color schemes | `Theme → Edit themes...` (`Ctrl+Shift+T`) |
 | Open a link in the linked window | Click the link (default) |
 | Open a link in a brand-new window | `Ctrl+click`, or right-click → "Open link in new window" |
 | Jump in the same window | Right-click → "Open link here" |
@@ -49,10 +52,27 @@ uv run ebooks-reader "C:/path/to/book.epub"
 
 Clicking further links reuses the same linked window. Links to web pages open in your default browser.
 
+## Color themes
+
+Open `Theme → Edit themes...`. The window stays open while you read, so you can try colors on the book live.
+
+- **Left:** list of themes (built-in and your own).
+- **Right:** theme name, background and text color (type a hex code like `#1e1e1e` or press **Pick...**), with a live preview.
+- **Save** stores the scheme under that name and applies it; it then appears in the `Theme` menu. Built-in themes can't be overwritten or deleted, so give your scheme its own name.
+- **Apply** uses the colors without saving. **Delete** removes a custom theme.
+
+### Sharing a scheme
+
+1. Press **Copy scheme**. A one-line code like `EBR1:eyJuYW1l...` is copied to the clipboard.
+2. Send it to someone (chat, email, anywhere).
+3. They copy the message, open the same window, press **Paste scheme** and then **Save**.
+
+The code can sit inside a longer message. It contains only the name and the two colors.
+
 ## Saved settings
 
 Settings are stored in the Windows registry under `HKEY_CURRENT_USER\Software\EbooksReader`:
-colors, text settings, window layout, last book and the reading position of each book.
+colors, your custom themes, text settings, window layout, last book and the reading position of each book.
 
 ## Build a Windows executable
 
@@ -86,7 +106,8 @@ ebooks-reader/
       main_window.py    # window, menus, contents tree, saved state
       reader_view.py    # scrolling text viewer
       viewer_window.py  # window for opened links (one chapter at a time)
-      themes.py         # color presets
+      themes.py         # built-in presets, custom themes, scheme sharing codes
+      theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
     resources/
       icon.svg
