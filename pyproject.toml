@@ -1,0 +1,27 @@
+[project]
+name = "ebooks-reader"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Saviola", email = "saviola@local.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.15.0",
+    "ebooklib>=0.21",
+    "pyside6>=6.12.0",
+]
+
+[project.scripts]
+ebooks-reader = "ebooks_reader:main"
+
+[build-system]
+requires = ["uv_build>=0.13.8,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pillow>=13.0.0",
+    "pyinstaller>=6.22.3",
+]
