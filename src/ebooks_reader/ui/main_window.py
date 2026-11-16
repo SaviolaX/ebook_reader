@@ -20,6 +20,8 @@ from ..core.models import TocEntry
 from ..formats import file_dialog_filter, load_book
 from .reader_view import ReaderView
 from .themes import DEFAULT_THEME, THEMES, apply_palette
+from .theme_dialog import ThemeDialog
+from .themes import all_themes
 from .typography import Typography, TypographyDialog
 from .viewer_window import ViewerWindow
 
@@ -136,18 +138,35 @@ class MainWindow(QMainWindow):
         m_view.addAction(zin)
         m_view.addAction(zout)
 
-        m_theme = self.menuBar().addMenu("&Theme")
-        for name, (bg, fg) in THEMES.items():
-            a = QAction(name, self)
+        self.m_theme = self.menuBar().addMenu("&Theme")
+        self.rebuild_theme_menu()
+
+    # ---------- themes ----------
+    def rebuild_theme_menu(self):
+        self.m_theme.clear()
+        for name, (bg, fg) in all_themes(self.settings).items():
+            a = QAction(name, self.m_theme)
             a.triggered.connect(lambda _=False, b=bg, f=fg: self.apply_colors(b, f))
-            m_theme.addAction(a)
-        m_theme.addSeparator()
-        a_bg = QAction("Custom background color...", self)
-        a_bg.triggered.connect(self.pick_bg)
-        a_fg = QAction("Custom text color...", self)
-        a_fg.triggered.connect(self.pick_fg)
-        m_theme.addAction(a_bg)
-        m_theme.addAction(a_fg)
+            self.m_theme.addAction(a)
+        self.m_theme.addSeparator()
+        a_edit = QAction("Edit themes...", self.m_theme)
+        a_edit.setShortcut("Ctrl+Shift+T")
+        a_edit.triggered.connect(self.open_theme_editor)
+        self.m_theme.addAction(a_edit)
+
+    def open_theme_editor(self):
+        dlg = getattr(self, "_theme_dlg", None)
+        try:
+            if dlg is not None and dlg.isVisible():
+                dlg.raise_()
+                dlg.activateWindow()
+                return
+        except RuntimeError:  # window was already deleted
+            pass
+        dlg = ThemeDialog(self.settings, self.bg, self.fg, self.apply_colors, self)
+        dlg.themesChanged.connect(self.rebuild_theme_menu)
+        self._theme_dlg = dlg
+        dlg.show()
 
     # ---------- colors ----------
     def apply_colors(self, bg: str, fg: str):
