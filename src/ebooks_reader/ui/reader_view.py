@@ -19,11 +19,11 @@ from .typography import Typography
 
 # (tag, size relative to body text, centered) - edit sizes here
 HEADING_LEVELS = [
-    ("h1", 2.4, True),
-    ("h2", 2.0, True),
-    ("h3", 1.7, True),
-    ("h4", 1.5, True),
-    ("h5", 1.35, True),
+    ("h1", 2.0, True),
+    ("h2", 1.5, True),
+    ("h3", 1.2, True),
+    ("h4", 1.3, True),
+    ("h5", 1.15, True),
     ("h6", 1.05, False),
 ]
 
