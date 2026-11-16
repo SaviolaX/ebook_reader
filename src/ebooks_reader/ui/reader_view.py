@@ -1,9 +1,31 @@
+import os
+import re
+
 from PySide6.QtCore import QPoint, QTimer, QUrl, Qt, Signal
-from PySide6.QtGui import QDesktopServices, QFont, QImage, QTextBlockFormat, QTextCursor
+from PySide6.QtGui import (
+    QDesktopServices,
+    QFont,
+    QImage,
+    QTextBlockFormat,
+    QTextCharFormat,
+    QTextCursor,
+    QTextFormat,
+)
 from PySide6.QtWidgets import QApplication, QTextBrowser
 
 from .themes import apply_palette
 from .typography import Typography
+
+
+# (tag, size relative to body text, centered) - edit sizes here
+HEADING_LEVELS = [
+    ("h1", 2.4, True),
+    ("h2", 2.0, True),
+    ("h3", 1.7, True),
+    ("h4", 1.5, True),
+    ("h5", 1.35, True),
+    ("h6", 1.05, False),
+]
 
 
 class ReaderView(QTextBrowser):
@@ -45,7 +67,7 @@ class ReaderView(QTextBrowser):
         self._img_cache.clear()
         self._restore_pos = None
         self.html_source = html
-        self.setHtml(html)
+        self.setHtml(self._prepared_html())
         self._apply_line_height()
 
     def loadResource(self, rtype, url):
@@ -78,7 +100,7 @@ class ReaderView(QTextBrowser):
         self.typography = t
         self._apply_font_and_margin()
         if self.html_source:
-            self.setHtml(self.html_source)  # re-layout (also re-fits images)
+            self.setHtml(self._prepared_html())  # re-layout (also re-fits images)
             self._apply_line_height()
             QTimer.singleShot(0, lambda: self.scroll_to_position(pos))
 
@@ -91,14 +113,7 @@ class ReaderView(QTextBrowser):
     @staticmethod
     def _heading_css(t: Typography) -> str:
         # (tag, size relative to body text, centered)
-        levels = [
-            ("h1", 2.0, True),
-            ("h2", 1.6, True),
-            ("h3", 1.35, True),
-            ("h4", 1.2, False),
-            ("h5", 1.1, False),
-            ("h6", 1.05, False),
-        ]
+        levels = HEADING_LEVELS
         rules = []
         for tag, scale, centered in levels:
             align = "center" if centered else "left"
@@ -118,6 +133,74 @@ class ReaderView(QTextBrowser):
             QTextBlockFormat.LineHeightTypes.ProportionalHeight.value,
         )
         cur.mergeBlockFormat(fmt)
+        self._apply_headings()
+
+    def _prepared_html(self) -> str:
+        """Book HTML with every <h1>-<h6> turned into a sized, bold <div>.
+
+        Qt ignores explicit font sizes inside real heading blocks, but honors
+        them on a plain <div>.
+        """
+        t = self.typography
+
+        def repl(m):
+            level = int(m.group(1)[1])
+            _tag, scale, centered = HEADING_LEVELS[level - 1]
+            size = t.size * scale
+            align = "center" if centered else "left"
+            return (
+                f'<p style="font-size:{size:.1f}pt; font-weight:bold; '
+                f"text-align:{align}; margin-top:{int(size)}px; "
+                f'margin-bottom:{int(t.size * 0.8)}px">{m.group(3)}</p>'
+            )
+
+        return re.sub(
+            r"<(h[1-6])(\b[^>]*)>(.*?)</\1>",
+            repl,
+            self.html_source,
+            flags=re.S | re.I,
+        )
+
+    def _apply_headings(self) -> None:
+        """Set size, weight, alignment and spacing of heading blocks directly."""
+        t = self.typography
+        doc = self.document()
+        cur = QTextCursor(doc)
+        cur.beginEditBlock()
+        block = doc.begin()
+        while block.isValid():
+            level = block.blockFormat().headingLevel()
+            if level and os.environ.get("EBR_DEBUG"):
+                print("heading", level, repr(block.text()[:40]))
+            if 1 <= level <= len(HEADING_LEVELS):
+                _tag, scale, centered = HEADING_LEVELS[level - 1]
+                cur.setPosition(block.position())
+                cur.setPosition(
+                    block.position() + max(block.length() - 1, 0),
+                    QTextCursor.MoveMode.KeepAnchor,
+                )
+                cf = QTextCharFormat()
+                cf.setProperty(QTextFormat.Property.FontSizeAdjustment, 0)
+                cf.setFontPointSize(t.size * scale)
+                cf.setFontWeight(QFont.Weight.Bold)
+                cur.mergeCharFormat(cf)
+                bf = QTextBlockFormat()
+                bf.setAlignment(
+                    Qt.AlignmentFlag.AlignHCenter if centered else Qt.AlignmentFlag.AlignLeft
+                )
+                bf.setTopMargin(t.size * scale)
+                bf.setBottomMargin(t.size * 0.8)
+                cur.mergeBlockFormat(bf)
+                if os.environ.get("EBR_DEBUG"):
+                    probe = QTextCursor(doc)
+                    probe.setPosition(block.position() + 1)
+                    print(
+                        f"  h{level}: wanted {t.size * scale:.1f}pt, "
+                        f"got {probe.charFormat().fontPointSize():.1f}pt "
+                        f"(body {t.size}pt)"
+                    )
+            block = block.next()
+        cur.endEditBlock()
 
     # ---------- reading position ----------
     def top_position(self) -> int:
