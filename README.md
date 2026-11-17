@@ -7,10 +7,12 @@ Version 0.1.0. Currently supports **EPUB**; the code is structured so more forma
 
 - Continuous scrolling view of the whole book, with images
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
-- 9 built-in color schemes for reading: Light, Sepia, Dark, Night (black), Paper, Soft Gray, Eye Green, Charcoal, Warm Night
+- 9 built-in color schemes for reading, grouped into Light (Light, Sepia, Paper, Soft Gray, Eye Green) and Dark (Dark, Night, Charcoal, Warm Night). Your own themes are sorted into the groups automatically
 - Theme editor: create your own schemes (name, background, text) with a live preview
 - Share a color scheme with a friend by copying and pasting a short code
 - Text settings: font, font size, line spacing, page margins
+- Chapter and section titles (h1-h5) are bold, centered and scale with the font size
+- Update check from the Help menu, with an optional check at startup
 - Book links (footnotes, cross-references) open in a separate window, so you keep your place in the main text
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
@@ -22,7 +24,7 @@ Version 0.1.0. Currently supports **EPUB**; the code is structured so more forma
 ## Run from source
 
 ```bash
-git clone <your-repo-url> ebooks-reader
+git clone https://github.com/SaviolaX/ebook_reader.git ebooks-reader
 cd ebooks-reader
 uv sync
 uv run ebooks-reader
@@ -49,14 +51,33 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Jump in the same window | Right-click → "Open link here" |
 | Turn off separate link windows | `View → Open book links in separate window` |
 | Don't reopen the last book at startup | `File → Reopen last book on startup` |
+| Check for a new version | `Help → Check for updates...` |
+| Turn off the startup update check | `Help → Check for updates on startup` |
+| Show the version | `Help → About` |
 
 Clicking further links reuses the same linked window. Links to web pages open in your default browser.
+
+## Headings
+
+Titles are drawn bigger than the body text and always scale with your font size. Sizes are relative to the body font:
+
+| Level | Size | Alignment |
+| --- | --- | --- |
+| h1 | 2.4x | centered |
+| h2 | 2.0x | centered |
+| h3 | 1.7x | centered |
+| h4 | 1.5x | centered |
+| h5 | 1.35x | centered |
+| h6 | 1.05x | left |
+
+To change them, edit `HEADING_LEVELS` at the top of `src/ebooks_reader/ui/reader_view.py` (name, size multiplier, centered or not).
+Qt's text widget ignores font sizes inside real heading blocks, so the reader turns each `<h1>`-`<h6>` into a styled paragraph when it shows the book.
 
 ## Color themes
 
 Open `Theme → Edit themes...`. The window stays open while you read, so you can try colors on the book live.
 
-- **Left:** list of themes (built-in and your own).
+- **Left:** list of themes (built-in and your own), grouped into Light and Dark by background color.
 - **Right:** theme name, background and text color (type a hex code like `#1e1e1e` or press **Pick...**), with a live preview.
 - **Save** stores the scheme under that name and applies it; it then appears in the `Theme` menu. Built-in themes can't be overwritten or deleted, so give your scheme its own name.
 - **Apply** uses the colors without saving. **Delete** removes a custom theme.
@@ -72,7 +93,22 @@ The code can sit inside a longer message. It contains only the name and the two 
 ## Saved settings
 
 Settings are stored in the Windows registry under `HKEY_CURRENT_USER\Software\EbooksReader`:
-colors, your custom themes, text settings, window layout, last book and the reading position of each book.
+colors, your custom themes, text settings, window layout, last book, update-check preference and the reading position of each book.
+
+## Updates
+
+`Help → Check for updates...` asks GitHub for the latest release of this repository and compares it with the installed version. If a newer one exists, the app offers to open the release page. The check also runs 3 seconds after startup (in the background, silent unless an update exists); turn it off in the Help menu.
+
+The app does not install updates itself: download the zip from the release page and replace the old folder. Your settings are kept, because they live in the registry.
+
+## Releasing a new version
+
+1. Commit your changes.
+2. Run `bash release.sh X.Y.Z` (for example `bash release.sh 0.2.4`).
+
+The script sets the version in `src/ebooks_reader/version.py` and `pyproject.toml`, commits, creates the tag `vX.Y.Z` and pushes. GitHub Actions (`.github/workflows/release.yml`) then builds the exe on Windows and attaches `EbooksReader-vX.Y.Z.zip` to a new release. The build fails on purpose if the tag does not match `version.py`.
+
+The repository must be public for the update check to see the releases. The update source is set in `GITHUB_REPO` in `version.py`.
 
 ## Build a Windows executable
 
@@ -92,13 +128,17 @@ ebooks-reader/
   build.sh              # PyInstaller build
   make_icon.py          # generates icon.ico from icon.svg
   run_app.py            # entry point for PyInstaller
+  release.sh            # bump version, tag and push a release
+  .github/workflows/release.yml  # builds and publishes releases on tags
   src/ebooks_reader/
     __init__.py         # main()
     __main__.py         # python -m ebooks_reader
+    version.py          # version number and GitHub repo for update checks
     app.py              # QApplication setup
     core/
       models.py         # TocEntry, LoadedBook (format-independent)
       registry.py       # format registry and load_book() dispatcher
+      updater.py        # background update check against GitHub releases
     formats/
       __init__.py       # imports every loader so it self-registers
       epub.py           # EPUB loader
@@ -146,4 +186,4 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - PDF support
 - Chapter-based loading for large books
 - Bookmarks and search
-- Installer (Inno Setup) and an About dialog
+- Installer (Inno Setup) with an in-app "Update now" button
