@@ -76,3 +76,16 @@ def import_theme(text: str) -> tuple[str, str, str]:
     if not is_valid_color(bg) or not is_valid_color(fg):
         raise ValueError("The color scheme code contains invalid colors.")
     return name or "Imported theme", QColor(bg).name(), QColor(fg).name()
+
+
+# ---------- grouping ----------
+def is_dark(bg: str) -> bool:
+    return QColor(bg).lightness() < 128
+
+
+def grouped_themes(settings) -> list[tuple[str, list[str]]]:
+    """[("Light", [names...]), ("Dark", [names...])], decided by background color."""
+    themes = all_themes(settings)
+    light = [n for n, (b, _f) in themes.items() if not is_dark(b)]
+    dark = [n for n, (b, _f) in themes.items() if is_dark(b)]
+    return [("Light", light), ("Dark", dark)]

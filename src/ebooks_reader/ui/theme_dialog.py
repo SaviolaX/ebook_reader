@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from .themes import (
     THEMES,
     all_themes,
+    grouped_themes,
     export_theme,
     import_theme,
     is_valid_color,
@@ -149,13 +150,22 @@ class ThemeDialog(QDialog):
         self.list.blockSignals(True)
         self.list.clear()
         custom = load_custom(self.settings)
-        for name in all_themes(self.settings):
-            label = name if name in custom else f"{name}  (built-in)"
-            item = QListWidgetItem(label)
-            item.setData(Qt.ItemDataRole.UserRole, name)
-            self.list.addItem(item)
-            if name == select:
-                self.list.setCurrentItem(item)
+        for group, names in grouped_themes(self.settings):
+            if not names:
+                continue
+            header = QListWidgetItem(f"— {group} —")
+            header.setFlags(Qt.ItemFlag.NoItemFlags)  # not selectable
+            font = header.font()
+            font.setBold(True)
+            header.setFont(font)
+            self.list.addItem(header)
+            for name in names:
+                label = name if name in custom else f"{name}  (built-in)"
+                item = QListWidgetItem(label)
+                item.setData(Qt.ItemDataRole.UserRole, name)
+                self.list.addItem(item)
+                if name == select:
+                    self.list.setCurrentItem(item)
         self.list.blockSignals(False)
         self._update_buttons()
 

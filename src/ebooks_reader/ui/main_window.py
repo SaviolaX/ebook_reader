@@ -26,7 +26,7 @@ from PySide6.QtGui import QDesktopServices
 from ..core.updater import UpdateChecker
 from ..version import __version__
 from .theme_dialog import ThemeDialog
-from .themes import all_themes
+from .themes import all_themes, grouped_themes
 from .typography import Typography, TypographyDialog
 from .viewer_window import ViewerWindow
 
@@ -163,11 +163,19 @@ class MainWindow(QMainWindow):
     # ---------- themes ----------
     def rebuild_theme_menu(self):
         self.m_theme.clear()
-        for name, (bg, fg) in all_themes(self.settings).items():
-            a = QAction(name, self.m_theme)
-            a.triggered.connect(lambda _=False, b=bg, f=fg: self.apply_colors(b, f))
-            self.m_theme.addAction(a)
-        self.m_theme.addSeparator()
+        themes = all_themes(self.settings)
+        for group, names in grouped_themes(self.settings):
+            if not names:
+                continue
+            header = QAction(f"{group} themes", self.m_theme)
+            header.setEnabled(False)
+            self.m_theme.addAction(header)
+            for name in names:
+                bg, fg = themes[name]
+                a = QAction(name, self.m_theme)
+                a.triggered.connect(lambda _=False, b=bg, f=fg: self.apply_colors(b, f))
+                self.m_theme.addAction(a)
+            self.m_theme.addSeparator()
         a_edit = QAction("Edit themes...", self.m_theme)
         a_edit.setShortcut("Ctrl+Shift+T")
         a_edit.triggered.connect(self.open_theme_editor)
