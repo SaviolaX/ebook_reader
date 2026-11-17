@@ -20,6 +20,11 @@ from ..core.models import TocEntry
 from ..formats import file_dialog_filter, load_book
 from .reader_view import ReaderView
 from .themes import DEFAULT_THEME, THEMES, apply_palette
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
+
+from ..core.updater import UpdateChecker
+from ..version import __version__
 from .theme_dialog import ThemeDialog
 from .themes import all_themes
 from .typography import Typography, TypographyDialog
@@ -140,6 +145,20 @@ class MainWindow(QMainWindow):
 
         self.m_theme = self.menuBar().addMenu("&Theme")
         self.rebuild_theme_menu()
+
+        m_help = self.menuBar().addMenu("&Help")
+        a_update = QAction("Check for &updates...", self)
+        a_update.triggered.connect(lambda: self.check_updates(silent=False))
+        m_help.addAction(a_update)
+        self.act_auto_update = QAction("Check for updates on startup", self)
+        self.act_auto_update.setCheckable(True)
+        self.act_auto_update.setChecked(self.settings.value("auto_update", True, type=bool))
+        self.act_auto_update.toggled.connect(lambda v: self.settings.setValue("auto_update", v))
+        m_help.addAction(self.act_auto_update)
+        m_help.addSeparator()
+        a_about = QAction("&About", self)
+        a_about.triggered.connect(self.show_about)
+        m_help.addAction(a_about)
 
     # ---------- themes ----------
     def rebuild_theme_menu(self):
@@ -285,6 +304,44 @@ class MainWindow(QMainWindow):
     def _window_closed(self, w):
         if w in self.extra_windows:
             self.extra_windows.remove(w)
+
+    # ---------- updates ----------
+    def startup_update_check(self):
+        if self.settings.value("auto_update", True, type=bool):
+            self.check_updates(silent=True)
+
+    def check_updates(self, silent: bool = False):
+        checker = getattr(self, "_checker", None)
+        if checker is not None and checker.isRunning():
+            return
+        self._checker = UpdateChecker(self)
+        self._checker.result.connect(lambda r: self._on_update_result(r, silent))
+        self._checker.start()
+
+    def _on_update_result(self, r: dict, silent: bool):
+        status = r.get("status")
+        if status == "update":
+            text = f"Version {r['version']} is available (you have {__version__})."
+            if r.get("notes"):
+                text += "\n\n" + r["notes"]
+            text += "\n\nOpen the download page?"
+            answer = QMessageBox.question(self, "Update available", text)
+            if answer == QMessageBox.StandardButton.Yes and r.get("url"):
+                QDesktopServices.openUrl(QUrl(r["url"]))
+        elif not silent:
+            if status == "latest":
+                QMessageBox.information(
+                    self, "Check for updates", f"You have the latest version ({__version__})."
+                )
+            else:
+                QMessageBox.warning(
+                    self, "Check for updates", r.get("message", "Could not check for updates.")
+                )
+
+    def show_about(self):
+        QMessageBox.about(
+            self, f"About {APP_TITLE}", f"{APP_TITLE}\nVersion {__version__}"
+        )
 
     # ---------- shutdown ----------
     def closeEvent(self, event):

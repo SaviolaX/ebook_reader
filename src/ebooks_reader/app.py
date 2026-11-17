@@ -39,4 +39,6 @@ def run() -> None:
     else:
         QTimer.singleShot(50, win.reopen_last_book)
 
+    QTimer.singleShot(3000, win.startup_update_check)
+
     sys.exit(app.exec())

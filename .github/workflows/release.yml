@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the version in the code
+        shell: bash
+        run: |
+          VERSION=$(grep -oP '__version__ = "\K[^"]+' src/ebooks_reader/version.py)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version.py ($VERSION)"
+            exit 1
+          fi
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build
+        shell: bash
+        run: bash build.sh
+
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/EbooksReader -DestinationPath "EbooksReader-${{ github.ref_name }}.zip"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: EbooksReader-${{ github.ref_name }}.zip
+          generate_release_notes: true
