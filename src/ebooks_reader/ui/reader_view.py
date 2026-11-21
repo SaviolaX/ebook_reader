@@ -33,6 +33,7 @@ class ReaderView(QTextBrowser):
 
     # (anchor name, force_new_window)
     linkRequested = Signal(str, bool)
+    imageRequested = Signal(str)  # path of an image inside the book
 
     def __init__(self):
         super().__init__()
@@ -46,7 +47,7 @@ class ReaderView(QTextBrowser):
         # optional hook: called before jumping to an anchor, returns True
         # if it replaced the document content (e.g. loaded another chapter)
         self.before_anchor = None
-        self.image_anchors: set[str] = set()
+        self.image_anchors: dict[str, str] = {}
         self._img_cache: dict[tuple[str, int], QImage] = {}
         self._resize_pos = None
         self._restore_pos = None
@@ -63,7 +64,7 @@ class ReaderView(QTextBrowser):
     # ---------- content ----------
     def set_book(self, html: str, resources: dict[str, bytes], image_anchors=None) -> None:
         self.resources = resources
-        self.image_anchors = set(image_anchors or ())
+        self.image_anchors = dict(image_anchors or {})
         self._img_cache.clear()
         self._restore_pos = None
         self.html_source = html
@@ -294,6 +295,10 @@ class ReaderView(QTextBrowser):
         if not fragment:
             return
         ctrl = bool(QApplication.keyboardModifiers() & Qt.KeyboardModifier.ControlModifier)
+        image = self.image_anchors.get(fragment)
+        if image and image in self.resources and not ctrl:
+            self.imageRequested.emit(image)  # plain click on an image link -> viewer
+            return
         if ctrl:
             self.linkRequested.emit(fragment, True)  # always a brand-new window
         elif self.links_in_window:
@@ -312,6 +317,10 @@ class ReaderView(QTextBrowser):
                 a_new.triggered.connect(lambda: self.linkRequested.emit(frag, True))
                 a_here = menu.addAction("Open link here")
                 a_here.triggered.connect(lambda: self.go_to_anchor(frag))
+                img = self.image_anchors.get(frag)
+                if img and img in self.resources:
+                    a_img = menu.addAction("Open image in viewer")
+                    a_img.triggered.connect(lambda: self.imageRequested.emit(img))
             else:
                 act = menu.addAction("Open link in browser")
                 act.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(href)))

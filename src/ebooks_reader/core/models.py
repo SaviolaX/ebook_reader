@@ -17,6 +17,6 @@ class LoadedBook:
     toc: list[TocEntry]
     resources: dict[str, bytes]  # internal path -> image bytes
     # anchors whose target is an image (or a caption of an image)
-    image_anchors: set[str] = field(default_factory=set)
+    image_anchors: dict[str, str] = field(default_factory=dict)  # anchor -> image path
     # HTML of each chapter separately (chapter i has anchors named c<i>_...)
     chapters: list[str] = field(default_factory=list)

@@ -24,6 +24,7 @@ class ViewerWindow(QMainWindow):
         typography: Typography,
         on_link,
         image_anchors=None,
+        on_image=None,
     ):
         super().__init__()
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
@@ -46,6 +47,8 @@ class ViewerWindow(QMainWindow):
         self.reader.center_anchors = True  # targets appear in the middle
         self.reader.before_anchor = self._ensure_chapter
         self.reader.linkRequested.connect(on_link)  # only Ctrl+click / context menu
+        if on_image is not None:
+            self.reader.imageRequested.connect(on_image)
         self.setCentralWidget(self.reader)
         self.reader.apply_colors(*colors)
 

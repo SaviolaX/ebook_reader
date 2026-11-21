@@ -72,6 +72,17 @@ def _image_above(tag):
     return None
 
 
+def _img_name(tag, doc_name: str) -> str:
+    """Path (inside the book) of the image shown by `tag`, or "" if unknown."""
+    img = tag if tag.name == "img" else tag.find("img")
+    if img is None:
+        return ""
+    src = img.get("src")
+    if not src or urlparse(src).scheme:
+        return ""
+    return _resolve(doc_name, src)[0]
+
+
 @register("EPUB", [".epub"])
 def load_epub(path: str) -> LoadedBook:
     book = epub.read_epub(path, options={"ignore_ncx": False})
@@ -95,7 +106,7 @@ def load_epub(path: str) -> LoadedBook:
 
     parts: list[str] = []
     keys: set[str] = set()
-    image_keys: set[str] = set()
+    image_keys: dict[str, str] = {}  # anchor -> image path inside the book
 
     for i, doc in enumerate(docs):
         soup = BeautifulSoup(doc.get_content(), "html.parser")
@@ -112,10 +123,13 @@ def load_epub(path: str) -> LoadedBook:
             key = f"c{i}_{a['name']}"
             keys.add(key)
             nxt = a.find_next_sibling(True)
-            if (a.parent is not None and _has_image(a.parent)) or (
-                nxt is not None and _has_image(nxt)
-            ):
-                image_keys.add(key)
+            holder = None
+            if a.parent is not None and _has_image(a.parent):
+                holder = a.parent
+            elif nxt is not None and _has_image(nxt):
+                holder = nxt
+            if holder is not None:
+                image_keys[key] = _img_name(holder, doc.get_name())
             a["name"] = key
 
         # id="x" anchors -> add explicit <a name> before the element
@@ -124,12 +138,12 @@ def load_epub(path: str) -> LoadedBook:
             keys.add(key)
             place = tag
             if _has_image(tag):
-                image_keys.add(key)
+                image_keys[key] = _img_name(tag, doc.get_name())
             else:
                 above = _image_above(tag)
                 if above is not None:  # caption -> point at the picture itself
                     place = above
-                    image_keys.add(key)
+                    image_keys[key] = _img_name(above, doc.get_name())
             anchor = soup.new_tag("a")
             anchor["name"] = key
             place.insert_before(anchor)

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from ..core.models import TocEntry
 from ..formats import file_dialog_filter, load_book
+from .image_viewer import ImageViewer
 from .reader_view import ReaderView
 from .themes import DEFAULT_THEME, THEMES, apply_palette
 from PySide6.QtCore import QUrl
@@ -45,11 +46,13 @@ class MainWindow(QMainWindow):
         self.current_path: str | None = None
         self.extra_windows: list[ViewerWindow] = []
         self.chapters: list[str] = []
+        self.image_viewer: ImageViewer | None = None
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
 
         self.reader = ReaderView()
         self.reader.linkRequested.connect(self.open_link_window)
+        self.reader.imageRequested.connect(self.open_image)
         self.reader.links_in_window = self.settings.value("links_in_window", True, type=bool)
         self.setCentralWidget(self.reader)
 
@@ -202,6 +205,8 @@ class MainWindow(QMainWindow):
         self.reader.apply_colors(bg, fg)
         for w in self.extra_windows:
             w.reader.apply_colors(bg, fg)
+        if self.image_viewer is not None:
+            self.image_viewer.apply_colors(bg, fg)
         self.settings.setValue("bg", bg)
         self.settings.setValue("fg", fg)
 
@@ -245,6 +250,8 @@ class MainWindow(QMainWindow):
             book = load_book(path)
             for w in list(self.extra_windows):
                 w.close()
+            if self.image_viewer is not None:
+                self.image_viewer.close()
             self.reader.set_book(book.html, book.resources, book.image_anchors)
             self.chapters = book.chapters
             self.tree.clear()
@@ -304,6 +311,7 @@ class MainWindow(QMainWindow):
             self.typography,
             self.open_link_window,
             self.reader.image_anchors,
+            self.open_image,
         )
         w.closed.connect(self._window_closed)
         self.extra_windows.append(w)
@@ -312,6 +320,20 @@ class MainWindow(QMainWindow):
     def _window_closed(self, w):
         if w in self.extra_windows:
             self.extra_windows.remove(w)
+
+    # ---------- image viewer ----------
+    def open_image(self, name: str):
+        data = self.reader.resources.get(name)
+        if data is None:
+            return
+        if self.image_viewer is None:
+            self.image_viewer = ImageViewer((self.bg, self.fg))
+            self.image_viewer.closed.connect(self._image_viewer_closed)
+        if not self.image_viewer.show_image(name, data):
+            QMessageBox.warning(self, "Image", "This image format can't be displayed.")
+
+    def _image_viewer_closed(self, _w):
+        self.image_viewer = None
 
     # ---------- updates ----------
     def startup_update_check(self):
@@ -356,6 +378,8 @@ class MainWindow(QMainWindow):
         self._save_position()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("window_state", self.saveState())
+        if self.image_viewer is not None:
+            self.image_viewer.close()
         for w in list(self.extra_windows):
             w.close()
         super().closeEvent(event)
