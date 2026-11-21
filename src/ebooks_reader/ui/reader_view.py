@@ -344,4 +344,10 @@ class ReaderView(QTextBrowser):
             else:
                 act = menu.addAction("Open link in browser")
                 act.triggered.connect(lambda: QDesktopServices.openUrl(QUrl(href)))
+        # right-click on any picture in the text (not only on image links)
+        image = self._image_at(event.pos())
+        if image and "Open image in viewer" not in [a.text() for a in menu.actions()]:
+            menu.addSeparator()
+            a_img = menu.addAction("Open image in viewer")
+            a_img.triggered.connect(lambda: self.imageRequested.emit(image))
         menu.exec(event.globalPos())
