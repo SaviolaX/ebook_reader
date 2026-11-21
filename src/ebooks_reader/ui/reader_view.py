@@ -1,7 +1,7 @@
 import os
 import re
 
-from PySide6.QtCore import QPoint, QTimer, QUrl, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QTimer, QUrl, Qt, Signal
 from PySide6.QtGui import (
     QDesktopServices,
     QFont,
@@ -271,7 +271,7 @@ class ReaderView(QTextBrowser):
         reloaded = bool(self.before_anchor and self.before_anchor(name))
         if reloaded:
             # new content was just set: give the layout a moment first
-            QTimer.singleShot(30, lambda: self._scroll_to_anchor(name))
+            QTimer.singleShot(30, self, lambda: self._scroll_to_anchor(name))
         else:
             self._scroll_to_anchor(name)
 
@@ -305,6 +305,26 @@ class ReaderView(QTextBrowser):
             self.linkRequested.emit(fragment, False)  # reuse the linked window
         else:
             self.go_to_anchor(fragment)
+
+    def _image_at(self, pos: QPoint) -> str:
+        """Path (inside the book) of the image under a viewport point, or ""."""
+        doc_pt = QPointF(
+            pos.x() + self.horizontalScrollBar().value(),
+            pos.y() + self.verticalScrollBar().value(),
+        )
+        name = self.document().documentLayout().imageAt(doc_pt)
+        if not name:
+            return ""
+        path = QUrl(name).path().lstrip("/")
+        return path if path in self.resources else ""
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            image = self._image_at(event.position().toPoint())
+            if image:
+                self.imageRequested.emit(image)
+                return
+        super().mouseDoubleClickEvent(event)
 
     def contextMenuEvent(self, event):
         href = self.anchorAt(event.pos())

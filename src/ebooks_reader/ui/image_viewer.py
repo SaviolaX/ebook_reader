@@ -17,7 +17,13 @@ class _View(QGraphicsView):
     zoomed = Signal()
 
     def wheelEvent(self, event):
-        step = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
+        dy = event.angleDelta().y()
+        if dy == 0:
+            return
+        step = 1.15 if dy > 0 else 1 / 1.15
+        new = self.transform().m11() * step
+        if (step < 1 and new < 0.02) or (step > 1 and new > 40):
+            return
         self.scale(step, step)
         self.zoomed.emit()
 
@@ -59,7 +65,8 @@ class ImageViewer(QMainWindow):
         add("Actual size (100%)", "1", self.actual_size)
         add("Save image as...", "Ctrl+S", self.save_as)
         add("Copy image", "Ctrl+C", self.copy)
-        add("Close", "Esc", self.close)
+        add("Fullscreen", "F11", self.toggle_fullscreen)
+        add("Close", "Esc", self._escape)
 
         self.apply_colors(*colors)
 
@@ -75,7 +82,10 @@ class ImageViewer(QMainWindow):
         self._item = self.scene.addPixmap(QPixmap.fromImage(img))
         self.scene.setSceneRect(self._item.boundingRect())
         self.setWindowTitle(f"{Path(name).name} ({img.width()}x{img.height()})")
-        self.show()
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
         self.fit()
         self.raise_()
         self.activateWindow()
@@ -97,6 +107,18 @@ class ImageViewer(QMainWindow):
 
     def _manual_zoom(self):
         self._fit = False
+
+    def toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.showFullScreen()
+
+    def _escape(self):
+        if self.isFullScreen():
+            self.showNormal()
+        else:
+            self.close()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

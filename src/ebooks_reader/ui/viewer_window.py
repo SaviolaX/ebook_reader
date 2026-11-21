@@ -53,7 +53,7 @@ class ViewerWindow(QMainWindow):
         self.reader.apply_colors(*colors)
 
         self._ensure_chapter(fragment)
-        QTimer.singleShot(50, lambda: self.reader.go_to_anchor(fragment))
+        QTimer.singleShot(50, self, lambda: self.reader.go_to_anchor(fragment))
 
     def _chapter_index(self, name: str) -> int:
         m = _CHAPTER_RE.match(name)
