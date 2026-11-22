@@ -15,6 +15,10 @@ Currently supports **EPUB**; the code is structured so more formats can be added
 - Chapter and section titles (h1-h5) are bold, centered and scale with the font size
 - Update check from the Help menu, with an optional check at startup
 - Book links (footnotes, cross-references) open in a separate window, so you keep your place in the main text
+- Search in the book (`Ctrl+F`) with next/previous, wrap-around and match case
+- Back / Forward after a jump (contents, links, bookmarks, search), like a browser
+- Bookmarks, saved per book
+- Reading progress in the status bar: current section and percent
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
 ## Requirements
@@ -43,6 +47,10 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | --- | --- |
 | Open a book | `File → Open...` (`Ctrl+O`) |
 | Show/hide contents | `View → Show contents` (`F9`) |
+| Search in the book | `Edit → Find in book...` (`Ctrl+F`); `Enter` / `Shift+Enter` or `F3` / `Shift+F3` = next / previous; `Esc` closes the bar |
+| Go back / forward after a jump | `Go → Back` (`Alt+Left`) / `Go → Forward` (`Alt+Right`), or the mouse side buttons |
+| Add a bookmark at the top of the page | `Bookmarks → Add bookmark here` (`Ctrl+D`) |
+| Go to / remove a bookmark | `Bookmarks` menu: click an entry, or use `Remove bookmark` |
 | Text settings | `View → Text settings...` (`Ctrl+T`) |
 | Larger / smaller font | `Ctrl+=` / `Ctrl+-` |
 | Change colors | `Theme` menu (built-in and your own schemes) |
@@ -75,6 +83,13 @@ Titles are drawn bigger than the body text and always scale with your font size.
 
 To change them, edit `HEADING_LEVELS` at the top of `src/ebooks_reader/ui/reader_view.py` (name, size multiplier, centered or not).
 Qt's text widget ignores font sizes inside real heading blocks, so the reader turns each `<h1>`-`<h6>` into a styled paragraph when it shows the book.
+
+## Searching, going back, bookmarks and progress
+
+- **Search:** `Ctrl+F` opens a bar under the text. Results appear as you type; the search starts from what is on screen, wraps around at the end, and a failed search keeps the current highlight. Selected text is used as the search text.
+- **Back / Forward:** every jump (a contents entry, a link followed in the same window, a bookmark, the first hit of a search) remembers where you were, so `Alt+Left` takes you back and `Alt+Right` forward again. The history is cleared when you open another book.
+- **Bookmarks:** `Ctrl+D` bookmarks the line at the top of the page. Each entry shows the percent and the start of the text. They are saved per book.
+- **Progress:** the status bar shows the current section (from the contents) and how far you are in the book. Before the first contents entry only the percent is shown.
 
 ## Image viewer
 
@@ -113,7 +128,7 @@ The code can sit inside a longer message. It contains only the name and the two 
 ## Saved settings
 
 Settings are stored in the Windows registry under `HKEY_CURRENT_USER\Software\EbooksReader`:
-colors, your custom themes, text settings, window layout, last book, update-check preference and the reading position of each book.
+colors, your custom themes, text settings, window layout, last book, update-check preference and the reading position and bookmarks of each book.
 
 ## Updates
 
@@ -167,6 +182,8 @@ ebooks-reader/
       reader_view.py    # scrolling text viewer
       viewer_window.py  # window for opened links (one chapter at a time)
       image_viewer.py   # full-size image window (zoom, pan, save, copy)
+      find_bar.py       # search bar (Ctrl+F)
+      bookmarks.py      # bookmark model and storage helpers
       themes.py         # built-in presets, custom themes, scheme sharing codes
       theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
@@ -201,11 +218,14 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - Which link points to an image is detected by a heuristic in `formats/epub.py` (an element with an id right under a short image block counts as the image's caption); an unusual book can fool it
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
 - PDF is not supported yet (it would need a different viewer)
+- Bookmarks, Back positions and reading positions are character offsets in the book text; if a future version converts a book differently, old ones can point a little off
 
 ## Ideas for later
 
 - FB2, TXT and other reflowable formats
 - PDF support
 - Chapter-based loading for large books
-- Bookmarks and search
+- Recent books menu, drag-and-drop to open a file, Space / Page Down paging
+- Fullscreen reading mode (`F11`)
+- Highlight the current section in the contents tree
 - Installer (Inno Setup) with an in-app "Update now" button
