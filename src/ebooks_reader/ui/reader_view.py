@@ -69,7 +69,15 @@ class ReaderView(QTextBrowser):
         self._restore_pos = None
         self.html_source = html
         self.setHtml(self._prepared_html())
+        self._forget_resize_position()
         self._apply_line_height()
+
+    def _forget_resize_position(self) -> None:
+        # setHtml() triggers a resize event while the new layout is unfinished;
+        # the position remembered then is bogus (the END of the book), and
+        # _finish_resize() would scroll there 150 ms later.
+        self._resize_timer.stop()
+        self._resize_pos = None
 
     def loadResource(self, rtype, url):
         if url.scheme() == "epub":
@@ -102,6 +110,7 @@ class ReaderView(QTextBrowser):
         self._apply_font_and_margin()
         if self.html_source:
             self.setHtml(self._prepared_html())  # re-layout (also re-fits images)
+            self._forget_resize_position()
             self._apply_line_height()
             QTimer.singleShot(0, lambda: self.scroll_to_position(pos))
 
@@ -253,7 +262,10 @@ class ReaderView(QTextBrowser):
         if self._restore_pos is not None:
             super().resizeEvent(event)  # restore ticks keep the position
             return
-        if self.html_source and self._resize_pos is None:
+        # Only a WIDTH change reflows the text; a height-only change (find bar,
+        # status bar) keeps the top line where it is, so there is nothing to restore.
+        width_changed = event.oldSize().width() != event.size().width()
+        if self.html_source and self._resize_pos is None and width_changed:
             self._resize_pos = self.top_position()
         super().resizeEvent(event)
         if self._resize_pos is not None:
