@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QTimer, Qt
-from PySide6.QtGui import QAction, QColor, QKeySequence
+from PySide6.QtGui import QAction, QColor, QKeySequence, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QColorDialog,
@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from ..core.models import TocEntry
 from ..formats import file_dialog_filter, load_book
+from .bookmarks import Bookmark, load_bookmarks, save_bookmarks
 from .find_bar import FindBar
 from .image_viewer import ImageViewer
 from .reader_view import ReaderView
@@ -42,6 +43,10 @@ def _position_key(path: str) -> str:
     return "positions/" + hashlib.md5(norm.encode("utf-8")).hexdigest()
 
 
+def _bookmarks_key(path: str) -> str:
+    return "bookmarks/" + _position_key(path).split("/", 1)[1]
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -49,6 +54,7 @@ class MainWindow(QMainWindow):
         self.current_path: str | None = None
         self.extra_windows: list[ViewerWindow] = []
         self.chapters: list[str] = []
+        self.bookmarks: list[Bookmark] = []
         self.image_viewer: ImageViewer | None = None
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
@@ -183,6 +189,16 @@ class MainWindow(QMainWindow):
         m_go.addAction(self.act_forward)
         self._update_history_actions()
 
+        self.m_bookmarks = self.menuBar().addMenu("&Bookmarks")
+        act_add_bm = QAction("&Add bookmark here", self)
+        act_add_bm.setShortcut("Ctrl+D")
+        act_add_bm.triggered.connect(self.add_bookmark)
+        self.m_bookmarks.addAction(act_add_bm)
+        self._bm_sep = self.m_bookmarks.addSeparator()
+        self.m_bm_remove = self.m_bookmarks.addMenu("&Remove bookmark")
+        self._bm_actions: list[QAction] = []
+        self._rebuild_bookmark_menu()
+
         self.m_theme = self.menuBar().addMenu("&Theme")
         self.rebuild_theme_menu()
 
@@ -298,6 +314,8 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"{book.title} - {APP_TITLE}")
             self.current_path = path
             self.settings.setValue("last_book", path)
+            self.bookmarks = load_bookmarks(self.settings, _bookmarks_key(path))
+            self._rebuild_bookmark_menu()
 
             pos = self.settings.value(_position_key(path), 0, type=int)
             if pos:
@@ -335,6 +353,66 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_back"):
             self.act_back.setEnabled(self.reader.can_go_back())
             self.act_forward.setEnabled(self.reader.can_go_forward())
+
+    # ---------- bookmarks ----------
+    def _percent_at(self, pos: int) -> int:
+        total = max(self.reader.document().characterCount() - 1, 1)
+        return min(100, int(pos * 100 / total))
+
+    def _snippet(self, pos: int, length: int = 60) -> str:
+        doc = self.reader.document()
+        cur = QTextCursor(doc)
+        cur.setPosition(max(0, min(pos, doc.characterCount() - 1)))
+        cur.movePosition(
+            QTextCursor.MoveOperation.NextCharacter,
+            QTextCursor.MoveMode.KeepAnchor,
+            length,
+        )
+        text = cur.selectedText()
+        for old, new in (("\u2029", " "), ("\u2028", " "), ("\ufffc", "[image]")):
+            text = text.replace(old, new)
+        return " ".join(text.split())
+
+    def add_bookmark(self):
+        if not self.current_path:
+            return
+        pos = self.reader.current_position()
+        if any(abs(b.pos - pos) < 50 for b in self.bookmarks):
+            self.statusBar().showMessage("There is already a bookmark here", 3000)
+            return
+        label = f"{self._percent_at(pos)}%  {self._snippet(pos)}".strip()
+        self.bookmarks.append(Bookmark(pos, label))
+        self.bookmarks.sort(key=lambda b: b.pos)
+        save_bookmarks(self.settings, _bookmarks_key(self.current_path), self.bookmarks)
+        self._rebuild_bookmark_menu()
+        self.statusBar().showMessage("Bookmark added", 3000)
+
+    def remove_bookmark(self, bm: Bookmark):
+        if bm in self.bookmarks and self.current_path:
+            self.bookmarks.remove(bm)
+            save_bookmarks(self.settings, _bookmarks_key(self.current_path), self.bookmarks)
+            self._rebuild_bookmark_menu()
+
+    def _rebuild_bookmark_menu(self):
+        for a in self._bm_actions:
+            self.m_bookmarks.removeAction(a)
+            a.deleteLater()
+        self._bm_actions = []
+        self.m_bm_remove.clear()
+        if not self.bookmarks:
+            none = QAction("(no bookmarks in this book)", self.m_bookmarks)
+            none.setEnabled(False)
+            self.m_bookmarks.insertAction(self._bm_sep, none)
+            self._bm_actions.append(none)
+        for bm in self.bookmarks:
+            text = bm.label.replace("&", "&&")
+            go = QAction(text, self.m_bookmarks)
+            go.triggered.connect(lambda _=False, p=bm.pos: self.reader.jump_to_position(p))
+            self.m_bookmarks.insertAction(self._bm_sep, go)
+            self._bm_actions.append(go)
+            rm = self.m_bm_remove.addAction(text)
+            rm.triggered.connect(lambda _=False, b=bm: self.remove_bookmark(b))
+        self.m_bm_remove.setEnabled(bool(self.bookmarks))
 
     # ---------- extra windows ----------
     def set_links_in_window(self, value: bool):
