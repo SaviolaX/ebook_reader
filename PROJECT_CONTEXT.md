@@ -12,7 +12,10 @@ structure is meant to allow more formats (FB2, PDF, ...). See README.md for feat
   write nothing if any pattern is missing.
 - Give a `git commit` command after each change.
 - Ask questions when something is unclear. Don't guess my book's markup: ask for the HTML.
-- Don't claim something works if you haven't tested it. You may test in a sandbox.
+- Don't claim something works if you haven't tested it. You may test in a sandbox:
+  PySide6-Essentials runs there with QT_QPA_PLATFORM=offscreen (real clicks and keys via
+  QTest, a synthetic EPUB made with ebooklib). Windows-only behavior can't be tested there;
+  say what was not tested.
 
 ## Architecture
 - src/ebooks_reader/core/models.py: TocEntry, LoadedBook (title, html, toc, resources,
@@ -24,6 +27,8 @@ structure is meant to allow more formats (FB2, PDF, ...). See README.md for feat
 - ui/reader_view.py: QTextBrowser subclass (font, margins, line spacing, headings,
   position restore, link handling, image cache).
 - ui/viewer_window.py: separate window for opened links; loads only one chapter at a time.
+- ui/image_viewer.py: ImageViewer window (QGraphicsView) for one original image taken from
+  LoadedBook.resources; one instance is reused for every image.
 - ui/main_window.py: menus, contents tree, saved state, themes, updates.
 - ui/themes.py, theme_dialog.py: built-in/custom themes, light/dark groups, share codes "EBR1:...".
 - ui/typography.py: text settings dialog.
@@ -33,6 +38,12 @@ structure is meant to allow more formats (FB2, PDF, ...). See README.md for feat
 - Clicking an internal link opens the target in a separate, reused window (so I keep my place
   in the main text). Ctrl+click opens a new window. Setting: View > Open book links in
   separate window.
+- Image links: a plain click on a link whose target is an image (LoadedBook.image_anchors:
+  anchor -> image path inside the book) opens the original in the ImageViewer; Ctrl+click
+  opens the linked window instead. Right-click on any picture in the text offers "Open image
+  in viewer"; double-click on a picture opens it too. Viewer keys: 0 fit, 1 100%, wheel zoom
+  (2%-4000%), drag to pan, Ctrl+S save original, Ctrl+C copy, F11 fullscreen, Esc (leave
+  fullscreen, then close). It closes when another book is opened or the app quits.
 - Settings are in the Windows registry (QSettings, org/app "EbooksReader"): colors, custom
   themes, typography, window layout, last book, per-book reading position (character offset).
 - Reading position is restored with repeated scroll ticks while the layout settles.
@@ -45,6 +56,14 @@ structure is meant to allow more formats (FB2, PDF, ...). See README.md for feat
 - Qt's HTML subset is limited; SVG is removed by the loader, so SVG-wrapped images don't show.
 - The whole book is one Qt document in the main window, so image-heavy books open slowly
   (about 2 s for my art book). The loader itself takes 0.18 s.
+- Image-link detection in epub.py is a heuristic (_has_image, _image_above): an element with an
+  id directly under a short image block counts as that image's caption, so a footnote
+  paragraph right below a picture would open the image. If a book breaks it, ask me for the
+  HTML around the problem.
+- QAbstractTextDocumentLayout.imageAt() works for hit-testing pictures in the text (used for
+  double-click and right-click); the name it returns is the epub:///path URL.
+- Delayed calls on a window must use QTimer.singleShot(ms, self, fn) (with a context object);
+  a plain lambda raises "QTimer already deleted" if the window was closed first.
 - Leftover debug code that could be removed: _apply_headings, _heading_css, EBR_DEBUG prints,
   EBR_FRESH switch in app.py.
 

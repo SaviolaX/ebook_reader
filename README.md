@@ -1,11 +1,12 @@
 # Ebooks Reader
 
 A simple desktop e-book reader for Windows, written in Python with PySide6 (Qt).
-Version 0.1.0. Currently supports **EPUB**; the code is structured so more formats can be added.
+Currently supports **EPUB**; the code is structured so more formats can be added.
 
 ## Features
 
 - Continuous scrolling view of the whole book, with images
+- Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
 - 9 built-in color schemes for reading, grouped into Light (Light, Sepia, Paper, Soft Gray, Eye Green) and Dark (Dark, Night, Charcoal, Warm Night). Your own themes are sorted into the groups automatically
 - Theme editor: create your own schemes (name, background, text) with a live preview
@@ -49,6 +50,8 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Open a link in the linked window | Click the link (default) |
 | Open a link in a brand-new window | `Ctrl+click`, or right-click → "Open link in new window" |
 | Jump in the same window | Right-click → "Open link here" |
+| Open an image full-size | Click a link that points to an image, or right-click a picture → "Open image in viewer", or double-click it |
+| Open an image link as text instead | `Ctrl+click` the link (opens the linked window at that place) |
 | Turn off separate link windows | `View → Open book links in separate window` |
 | Don't reopen the last book at startup | `File → Reopen last book on startup` |
 | Check for a new version | `Help → Check for updates...` |
@@ -63,15 +66,32 @@ Titles are drawn bigger than the body text and always scale with your font size.
 
 | Level | Size | Alignment |
 | --- | --- | --- |
-| h1 | 2.4x | centered |
-| h2 | 2.0x | centered |
-| h3 | 1.7x | centered |
-| h4 | 1.5x | centered |
-| h5 | 1.35x | centered |
+| h1 | 2.0x | centered |
+| h2 | 1.5x | centered |
+| h3 | 1.2x | centered |
+| h4 | 1.3x | centered |
+| h5 | 1.15x | centered |
 | h6 | 1.05x | left |
 
 To change them, edit `HEADING_LEVELS` at the top of `src/ebooks_reader/ui/reader_view.py` (name, size multiplier, centered or not).
 Qt's text widget ignores font sizes inside real heading blocks, so the reader turns each `<h1>`-`<h6>` into a styled paragraph when it shows the book.
+
+## Image viewer
+
+A plain click on a book link that points to an image opens the original, full-size picture in a separate window; the main text stays where it is. You can also right-click any picture in the text and choose **Open image in viewer**, or double-click it. Further images reuse the same window, and it follows your color theme. It closes when you open another book or quit.
+
+| Action | How |
+| --- | --- |
+| Zoom | Mouse wheel (2% to 4000%) |
+| Move around | Drag with the mouse |
+| Fit to window | `0` (small images are never enlarged) |
+| Actual size (100%) | `1` |
+| Save the original file | `Ctrl+S` |
+| Copy the image | `Ctrl+C` |
+| Fullscreen | `F11` |
+| Leave fullscreen / close | `Esc` |
+
+All of these are also in the viewer's right-click menu.
 
 ## Color themes
 
@@ -146,6 +166,7 @@ ebooks-reader/
       main_window.py    # window, menus, contents tree, saved state
       reader_view.py    # scrolling text viewer
       viewer_window.py  # window for opened links (one chapter at a time)
+      image_viewer.py   # full-size image window (zoom, pan, save, copy)
       themes.py         # built-in presets, custom themes, scheme sharing codes
       theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
@@ -176,7 +197,8 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 ## Known limitations
 
 - The book's own CSS and inline styles are removed so your colors always apply, so some formatting is lost
-- Qt's text widget renders a simplified subset of HTML; SVG images are removed
+- Qt's text widget renders a simplified subset of HTML; SVG images are removed, so images wrapped in SVG can't be shown or opened in the viewer
+- Which link points to an image is detected by a heuristic in `formats/epub.py` (an element with an id right under a short image block counts as the image's caption); an unusual book can fool it
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
 - PDF is not supported yet (it would need a different viewer)
 
