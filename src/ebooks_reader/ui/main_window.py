@@ -14,10 +14,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QTreeWidget,
     QTreeWidgetItem,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ..core.models import TocEntry
 from ..formats import file_dialog_filter, load_book
+from .find_bar import FindBar
 from .image_viewer import ImageViewer
 from .reader_view import ReaderView
 from .themes import DEFAULT_THEME, THEMES, apply_palette
@@ -56,7 +59,14 @@ class MainWindow(QMainWindow):
         self.reader.history_enabled = True
         self.reader.historyChanged.connect(self._update_history_actions)
         self.reader.links_in_window = self.settings.value("links_in_window", True, type=bool)
-        self.setCentralWidget(self.reader)
+        self.find_bar = FindBar(self.reader)
+        central = QWidget()
+        box = QVBoxLayout(central)
+        box.setContentsMargins(0, 0, 0, 0)
+        box.setSpacing(0)
+        box.addWidget(self.reader, 1)
+        box.addWidget(self.find_bar)
+        self.setCentralWidget(central)
 
         # save the reading position 1 s after scrolling stops
         self._save_timer = QTimer(self)
@@ -113,6 +123,20 @@ class MainWindow(QMainWindow):
         act_quit = QAction("&Quit", self)
         act_quit.triggered.connect(self.close)
         m_file.addAction(act_quit)
+
+        m_edit = self.menuBar().addMenu("&Edit")
+        act_find = QAction("&Find in book...", self)
+        act_find.setShortcut("Ctrl+F")
+        act_find.triggered.connect(self.find_bar.open)
+        m_edit.addAction(act_find)
+        act_find_next = QAction("Find &next", self)
+        act_find_next.setShortcut("F3")
+        act_find_next.triggered.connect(self.find_bar.find_next)
+        m_edit.addAction(act_find_next)
+        act_find_prev = QAction("Find &previous", self)
+        act_find_prev.setShortcut("Shift+F3")
+        act_find_prev.triggered.connect(self.find_bar.find_prev)
+        m_edit.addAction(act_find_prev)
 
         m_view = self.menuBar().addMenu("&View")
         toggle = self.dock.toggleViewAction()
@@ -265,6 +289,7 @@ class MainWindow(QMainWindow):
                 w.close()
             if self.image_viewer is not None:
                 self.image_viewer.close()
+            self.find_bar.close_bar()
             self.reader.set_book(book.html, book.resources, book.image_anchors)
             self.chapters = book.chapters
             self.tree.clear()

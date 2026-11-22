@@ -383,6 +383,14 @@ class ReaderView(QTextBrowser):
                 return
         super().mousePressEvent(event)
 
+    def reveal_cursor(self) -> None:
+        """Scroll so the text cursor (e.g. a search hit) isn't at the very edge."""
+        rect = self.cursorRect()
+        h = self.viewport().height()
+        if rect.top() < h // 6 or rect.bottom() > h * 5 // 6:
+            bar = self.verticalScrollBar()
+            bar.setValue(bar.value() + rect.top() - h // 3)
+
     # ---------- links ----------
     def _on_anchor(self, url: QUrl) -> None:
         if url.scheme() in ("http", "https", "mailto"):
