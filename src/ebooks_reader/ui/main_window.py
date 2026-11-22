@@ -53,6 +53,8 @@ class MainWindow(QMainWindow):
         self.reader = ReaderView()
         self.reader.linkRequested.connect(self.open_link_window)
         self.reader.imageRequested.connect(self.open_image)
+        self.reader.history_enabled = True
+        self.reader.historyChanged.connect(self._update_history_actions)
         self.reader.links_in_window = self.settings.value("links_in_window", True, type=bool)
         self.setCentralWidget(self.reader)
 
@@ -145,6 +147,17 @@ class MainWindow(QMainWindow):
         zout.triggered.connect(lambda: self.change_size(-1))
         m_view.addAction(zin)
         m_view.addAction(zout)
+
+        m_go = self.menuBar().addMenu("&Go")
+        self.act_back = QAction("&Back", self)
+        self.act_back.setShortcut("Alt+Left")
+        self.act_back.triggered.connect(self.reader.go_back)
+        m_go.addAction(self.act_back)
+        self.act_forward = QAction("&Forward", self)
+        self.act_forward.setShortcut("Alt+Right")
+        self.act_forward.triggered.connect(self.reader.go_forward)
+        m_go.addAction(self.act_forward)
+        self._update_history_actions()
 
         self.m_theme = self.menuBar().addMenu("&Theme")
         self.rebuild_theme_menu()
@@ -291,7 +304,12 @@ class MainWindow(QMainWindow):
     def _goto(self, item, *_):
         key = item.data(0, Qt.ItemDataRole.UserRole)
         if key:
-            self.reader.scrollToAnchor(key)
+            self.reader.go_to_anchor(key)  # remembers where I was (Back)
+
+    def _update_history_actions(self):
+        if hasattr(self, "act_back"):
+            self.act_back.setEnabled(self.reader.can_go_back())
+            self.act_forward.setEnabled(self.reader.can_go_forward())
 
     # ---------- extra windows ----------
     def set_links_in_window(self, value: bool):

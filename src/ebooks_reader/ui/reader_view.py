@@ -34,6 +34,7 @@ class ReaderView(QTextBrowser):
     # (anchor name, force_new_window)
     linkRequested = Signal(str, bool)
     imageRequested = Signal(str)  # path of an image inside the book
+    historyChanged = Signal()  # Back/Forward became (un)available
 
     def __init__(self):
         super().__init__()
@@ -48,6 +49,11 @@ class ReaderView(QTextBrowser):
         # if it replaced the document content (e.g. loaded another chapter)
         self.before_anchor = None
         self.image_anchors: dict[str, str] = {}
+        # Back/Forward: character offsets. Only the main window turns this on.
+        self.history_enabled = False
+        self._back: list[int] = []
+        self._forward: list[int] = []
+        self._forward_backup: list[int] = []
         self._img_cache: dict[tuple[str, int], QImage] = {}
         self._resize_pos = None
         self._restore_pos = None
@@ -67,6 +73,7 @@ class ReaderView(QTextBrowser):
         self.image_anchors = dict(image_anchors or {})
         self._img_cache.clear()
         self._restore_pos = None
+        self._clear_history()
         self.html_source = html
         self.setHtml(self._prepared_html())
         self._forget_resize_position()
@@ -277,6 +284,8 @@ class ReaderView(QTextBrowser):
             self.scroll_to_position(pos)
 
     def go_to_anchor(self, name: str) -> None:
+        start = self.current_position() if self.html_source else 0
+        pushed = self.remember_position()
         # An explicit jump cancels any pending "restore after resize"
         self._resize_timer.stop()
         self._resize_pos = None
@@ -286,6 +295,8 @@ class ReaderView(QTextBrowser):
             QTimer.singleShot(30, self, lambda: self._scroll_to_anchor(name))
         else:
             self._scroll_to_anchor(name)
+            if pushed and self.current_position() == start:
+                self._undo_remember()  # landed on the same spot: nothing to go back to
 
     def _scroll_to_anchor(self, name: str) -> None:
         self.scrollToAnchor(name)
@@ -297,6 +308,80 @@ class ReaderView(QTextBrowser):
             else:
                 # text: put it in the middle of the window
                 bar.setValue(bar.value() - self.viewport().height() // 2)
+
+    # ---------- back / forward ----------
+    HISTORY_LIMIT = 50
+
+    def _clear_history(self) -> None:
+        had = bool(self._back or self._forward)
+        self._back.clear()
+        self._forward.clear()
+        if had:
+            self.historyChanged.emit()
+
+    def can_go_back(self) -> bool:
+        return bool(self._back)
+
+    def can_go_forward(self) -> bool:
+        return bool(self._forward)
+
+    def remember_position(self, at: int | None = None) -> bool:
+        """Call right BEFORE a jump: Back will return to `at` (default: here).
+
+        Returns True if a Back entry was added.
+        """
+        if not self.history_enabled or not self.html_source:
+            return False
+        pos = self.current_position() if at is None else at
+        if self._back and self._back[-1] == pos:
+            return False
+        self._forward_backup = list(self._forward)
+        self._back.append(pos)
+        del self._back[: -self.HISTORY_LIMIT]
+        self._forward.clear()
+        self.historyChanged.emit()
+        return True
+
+    def _undo_remember(self) -> None:
+        if self._back:
+            self._back.pop()
+        self._forward = self._forward_backup
+        self.historyChanged.emit()
+
+    def _scroll_now(self, pos: int) -> None:
+        self._resize_timer.stop()
+        self._resize_pos = None
+        self._restore_pos = None
+        self.scroll_to_position(pos)
+
+    def jump_to_position(self, pos: int) -> None:
+        """Jump to a character offset (e.g. a bookmark); Back returns here."""
+        self.remember_position()
+        self._scroll_now(pos)
+
+    def go_back(self) -> None:
+        if not self._back:
+            return
+        self._forward.append(self.current_position())
+        self._scroll_now(self._back.pop())
+        self.historyChanged.emit()
+
+    def go_forward(self) -> None:
+        if not self._forward:
+            return
+        self._back.append(self.current_position())
+        self._scroll_now(self._forward.pop())
+        self.historyChanged.emit()
+
+    def mousePressEvent(self, event):
+        if self.history_enabled:
+            if event.button() == Qt.MouseButton.BackButton:
+                self.go_back()
+                return
+            if event.button() == Qt.MouseButton.ForwardButton:
+                self.go_forward()
+                return
+        super().mousePressEvent(event)
 
     # ---------- links ----------
     def _on_anchor(self, url: QUrl) -> None:
