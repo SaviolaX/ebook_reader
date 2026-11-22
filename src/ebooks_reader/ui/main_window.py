@@ -1,5 +1,6 @@
 import hashlib
 import os
+from bisect import bisect_right
 from dataclasses import replace
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from PySide6.QtWidgets import (
     QColorDialog,
     QDockWidget,
     QFileDialog,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QTreeWidget,
@@ -55,6 +57,8 @@ class MainWindow(QMainWindow):
         self.extra_windows: list[ViewerWindow] = []
         self.chapters: list[str] = []
         self.bookmarks: list[Bookmark] = []
+        self._section_starts: list[int] = []  # sorted character offsets
+        self._section_titles: list[str] = []
         self.image_viewer: ImageViewer | None = None
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
@@ -81,6 +85,18 @@ class MainWindow(QMainWindow):
         self._save_timer.timeout.connect(self._save_position)
         self.reader.verticalScrollBar().valueChanged.connect(
             lambda _: self._save_timer.start()
+        )
+
+        # reading progress in the status bar (refreshed 120 ms after scrolling)
+        self.progress_label = QLabel("")
+        self.progress_label.setContentsMargins(0, 0, 8, 0)
+        self.statusBar().addPermanentWidget(self.progress_label)
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setSingleShot(True)
+        self._progress_timer.setInterval(120)
+        self._progress_timer.timeout.connect(self._update_progress)
+        self.reader.verticalScrollBar().valueChanged.connect(
+            lambda _: self._progress_timer.start()
         )
 
         self.tree = QTreeWidget()
@@ -308,6 +324,7 @@ class MainWindow(QMainWindow):
             self.find_bar.close_bar()
             self.reader.set_book(book.html, book.resources, book.image_anchors)
             self.chapters = book.chapters
+            self._index_sections(book.toc)
             self.tree.clear()
             self._add_entries(self.tree.invisibleRootItem(), book.toc)
             self.tree.expandToDepth(0)
@@ -317,6 +334,7 @@ class MainWindow(QMainWindow):
             self.bookmarks = load_bookmarks(self.settings, _bookmarks_key(path))
             self._rebuild_bookmark_menu()
 
+            self._update_progress()
             pos = self.settings.value(_position_key(path), 0, type=int)
             if pos:
                 self.reader.restore_position(pos)
@@ -413,6 +431,40 @@ class MainWindow(QMainWindow):
             rm = self.m_bm_remove.addAction(text)
             rm.triggered.connect(lambda _=False, b=bm: self.remove_bookmark(b))
         self.m_bm_remove.setEnabled(bool(self.bookmarks))
+
+    # ---------- reading progress ----------
+    def _index_sections(self, toc: list[TocEntry]):
+        """Remember where each contents entry starts, to name the current section."""
+        anchors = self.reader.anchor_positions()
+        found: list[tuple[int, str]] = []
+
+        def walk(entries):
+            for e in entries:
+                if e.key in anchors:
+                    found.append((anchors[e.key], e.title))
+                walk(e.children)
+
+        walk(toc)
+        found.sort(key=lambda t: t[0])  # stable: a child follows its parent
+        self._section_starts = [p for p, _ in found]
+        self._section_titles = [t for _, t in found]
+
+    def _section_at(self, pos: int) -> str:
+        i = bisect_right(self._section_starts, pos) - 1
+        return self._section_titles[i] if i >= 0 else ""
+
+    def _update_progress(self):
+        if not self.current_path:
+            self.progress_label.setText("")
+            return
+        bar = self.reader.verticalScrollBar()
+        pos = self.reader.current_position()
+        at_end = bar.maximum() > 0 and bar.value() >= bar.maximum()
+        percent = 100 if at_end else self._percent_at(pos)
+        title = self._section_at(pos)
+        if len(title) > 60:
+            title = title[:59] + "…"
+        self.progress_label.setText(f"{title}  ·  {percent}%" if title else f"{percent}%")
 
     # ---------- extra windows ----------
     def set_links_in_window(self, value: bool):

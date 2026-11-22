@@ -391,6 +391,28 @@ class ReaderView(QTextBrowser):
             bar = self.verticalScrollBar()
             bar.setValue(bar.value() + rect.top() - h // 3)
 
+    def anchor_positions(self) -> dict[str, int]:
+        """Character offset of every <a name="..."> anchor in the document."""
+        out: dict[str, int] = {}
+        block = self.document().begin()
+        while block.isValid():
+            # like QTextBrowser.scrollToAnchor: the block's own format, then its fragments
+            bfmt = block.charFormat()
+            if bfmt.isAnchor():
+                for name in bfmt.anchorNames():
+                    out.setdefault(name, block.position())
+            it = block.begin()
+            while not it.atEnd():
+                frag = it.fragment()
+                if frag.isValid():
+                    fmt = frag.charFormat()
+                    if fmt.isAnchor():
+                        for name in fmt.anchorNames():
+                            out.setdefault(name, frag.position())
+                it += 1
+            block = block.next()
+        return out
+
     # ---------- links ----------
     def _on_anchor(self, url: QUrl) -> None:
         if url.scheme() in ("http", "https", "mailto"):
