@@ -4,7 +4,7 @@ from bisect import bisect_right
 from dataclasses import replace
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QTimer, Qt
+from PySide6.QtCore import QSettings, QStandardPaths, QTimer, Qt
 from PySide6.QtGui import QAction, QColor, QKeySequence, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -25,6 +25,8 @@ from ..formats import file_dialog_filter, load_book
 from .bookmarks import Bookmark, load_bookmarks, save_bookmarks
 from .find_bar import FindBar
 from .image_viewer import ImageViewer
+from .notes import NoteStore, flatten
+from .notes_window import NotesWindow
 from .reader_view import ReaderView
 from .themes import DEFAULT_THEME, THEMES, apply_palette
 from PySide6.QtCore import QUrl
@@ -63,6 +65,12 @@ class MainWindow(QMainWindow):
         self._entry_items: dict[int, QTreeWidgetItem] = {}  # id(TocEntry) -> tree item
         self._current_section = -1  # index into _section_starts
         self.image_viewer: ImageViewer | None = None
+        self.notes_window: NotesWindow | None = None
+        self.note_store: NoteStore | None = None
+        self._flat: list = []
+        self._note_ids: dict[int, str | None] = {}  # id(TocEntry) -> note id
+        self._book_title = ""
+        self._section_entries: list[TocEntry] = []
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
 
@@ -218,6 +226,16 @@ class MainWindow(QMainWindow):
         self._bm_actions: list[QAction] = []
         self._rebuild_bookmark_menu()
 
+        m_notes = self.menuBar().addMenu("&Notes")
+        act_show_notes = QAction("&Show notes...", self)
+        act_show_notes.setShortcut("Ctrl+Shift+N")
+        act_show_notes.triggered.connect(lambda: self.show_notes())
+        m_notes.addAction(act_show_notes)
+        act_add_note = QAction("&Add note for current section", self)
+        act_add_note.setShortcut("Ctrl+N")
+        act_add_note.triggered.connect(self.add_note_here)
+        m_notes.addAction(act_add_note)
+
         self.m_theme = self.menuBar().addMenu("&Theme")
         self.rebuild_theme_menu()
 
@@ -279,6 +297,8 @@ class MainWindow(QMainWindow):
             w.reader.apply_colors(bg, fg)
         if self.image_viewer is not None:
             self.image_viewer.apply_colors(bg, fg)
+        if self.notes_window is not None:
+            self.notes_window.apply_colors(bg, fg)
         self.settings.setValue("bg", bg)
         self.settings.setValue("fg", fg)
 
@@ -324,6 +344,8 @@ class MainWindow(QMainWindow):
                 w.close()
             if self.image_viewer is not None:
                 self.image_viewer.close()
+            if self.notes_window is not None:
+                self.notes_window.close()  # saves its note first
             self.find_bar.close_bar()
             self.reader.set_book(book.html, book.resources, book.image_anchors)
             self.chapters = book.chapters
@@ -338,6 +360,7 @@ class MainWindow(QMainWindow):
             self.settings.setValue("last_book", path)
             self.bookmarks = load_bookmarks(self.settings, _bookmarks_key(path))
             self._rebuild_bookmark_menu()
+            self._load_notes(path, book)
 
             self._update_progress()
             pos = self.settings.value(_position_key(path), 0, type=int)
@@ -455,6 +478,7 @@ class MainWindow(QMainWindow):
         self._section_starts = [p for p, _, _ in found]
         self._section_titles = [t for _, t, _ in found]
         self._section_items = [self._entry_items.get(id(e)) for _, _, e in found]
+        self._section_entries = [e for _, _, e in found]
         self._current_section = -1
 
     # a click on a contents entry can leave the top line a few characters
@@ -503,6 +527,64 @@ class MainWindow(QMainWindow):
         if len(title) > 60:
             title = title[:59] + "…"
         self.progress_label.setText(f"{title}  ·  {percent}%" if title else f"{percent}%")
+
+    # ---------- notes ----------
+    def _notes_dir(self) -> Path:
+        base = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)
+        return Path(base) / "notes"
+
+    def _load_notes(self, path: str, book) -> None:
+        name = _position_key(path).split("/", 1)[1]  # same md5 as positions and bookmarks
+        self.note_store = NoteStore(self._notes_dir() / f"{name}.json")
+        self._flat = flatten(book.toc)
+        self._note_ids = {id(f.entry): f.note_id for f in self._flat}
+        self._book_title = book.title
+        self._update_note_markers()
+
+    def _update_note_markers(self) -> None:
+        store = self.note_store
+        for f in self._flat:
+            item = self._entry_items.get(id(f.entry))
+            if item is None:
+                continue
+            mark = store is not None and store.has(f.note_id)
+            item.setText(0, f.entry.title + ("  \u270e" if mark else ""))
+
+    def show_notes(self, note_id: str | None = None) -> None:
+        if not self.current_path or self.note_store is None:
+            return
+        w = self.notes_window
+        if w is None:
+            w = NotesWindow(
+                self.note_store,
+                self._flat,
+                self._book_title,
+                (self.bg, self.fg),
+                self.reader.go_to_anchor,
+            )
+            w.notesChanged.connect(self._update_note_markers)
+            w.closed.connect(self._notes_window_closed)
+            self.notes_window = w
+        w.show()
+        w.raise_()
+        w.activateWindow()
+        if note_id:
+            w.select_note(note_id)
+
+    def add_note_here(self) -> None:
+        if not self.current_path:
+            return
+        i = self._section_index(self.reader.current_position())
+        entry = self._section_entries[i] if 0 <= i < len(self._section_entries) else None
+        note_id = self._note_ids.get(id(entry)) if entry is not None else None
+        if note_id is None:
+            self.statusBar().showMessage(
+                "No contents section at this place; showing all notes", 4000
+            )
+        self.show_notes(note_id)
+
+    def _notes_window_closed(self, _w) -> None:
+        self.notes_window = None
 
     # ---------- extra windows ----------
     def set_links_in_window(self, value: bool):
@@ -589,6 +671,8 @@ class MainWindow(QMainWindow):
         self._save_position()
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("window_state", self.saveState())
+        if self.notes_window is not None:
+            self.notes_window.close()
         if self.image_viewer is not None:
             self.image_viewer.close()
         for w in list(self.extra_windows):
