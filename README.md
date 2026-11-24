@@ -8,6 +8,7 @@ Currently supports **EPUB**; the code is structured so more formats can be added
 - Continuous scrolling view of the whole book, with images
 - Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
+- The contents tree follows your reading: the current section is highlighted and its parents are expanded
 - 9 built-in color schemes for reading, grouped into Light (Light, Sepia, Paper, Soft Gray, Eye Green) and Dark (Dark, Night, Charcoal, Warm Night). Your own themes are sorted into the groups automatically
 - Theme editor: create your own schemes (name, background, text) with a live preview
 - Share a color scheme with a friend by copying and pasting a short code
@@ -18,6 +19,7 @@ Currently supports **EPUB**; the code is structured so more formats can be added
 - Search in the book (`Ctrl+F`) with next/previous, wrap-around and match case
 - Back / Forward after a jump (contents, links, bookmarks, search), like a browser
 - Bookmarks, saved per book
+- Notes per chapter and part, with a notes window, Markdown export and markers in the contents tree
 - Reading progress in the status bar: current section and percent
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
@@ -51,6 +53,8 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Go back / forward after a jump | `Go → Back` (`Alt+Left`) / `Go → Forward` (`Alt+Right`), or the mouse side buttons |
 | Add a bookmark at the top of the page | `Bookmarks → Add bookmark here` (`Ctrl+D`) |
 | Go to / remove a bookmark | `Bookmarks` menu: click an entry, or use `Remove bookmark` |
+| Show all notes | `Notes → Show notes...` (`Ctrl+Shift+N`) |
+| Add a note for the current section | `Notes → Add note for current section` (`Ctrl+N`) |
 | Text settings | `View → Text settings...` (`Ctrl+T`) |
 | Larger / smaller font | `Ctrl+=` / `Ctrl+-` |
 | Change colors | `Theme` menu (built-in and your own schemes) |
@@ -91,6 +95,21 @@ Qt's text widget ignores font sizes inside real heading blocks, so the reader tu
 - **Bookmarks:** `Ctrl+D` bookmarks the line at the top of the page. Each entry shows the percent and the start of the text. They are saved per book.
 - **Progress:** the status bar shows the current section (from the contents) and how far you are in the book. Before the first contents entry only the percent is shown.
 
+## Notes
+
+Write your own notes for each chapter or part and read them all in one window. Notes follow the contents tree: every contents entry can hold one note, and nested entries appear as nested parts.
+
+- `Notes → Show notes...` (`Ctrl+Shift+N`) opens the notes window: contents on the left, a text editor on the right.
+- `Notes → Add note for current section` (`Ctrl+N`) opens the window on the section at the top of the page, ready to type.
+- Notes are saved automatically a moment after you stop typing, when you switch entries and when you close the window.
+- Entries with a note are bold with a pencil mark, in the notes window and in the contents tree. Tick **Only entries with notes** to hide the rest. The window title shows how many notes the book has.
+- Click a title in the notes window to jump the main text to that section; `Alt+Left` takes you back.
+- **Copy all notes** and **Export Markdown...** produce chapter and part headings followed by your text. Entries without notes are left out.
+- Entries that have no link target in the book (greyed out) can't hold a note.
+- Clearing the text of a note deletes it.
+
+Notes are stored per book in a JSON file in the app data folder (Qt's `AppDataLocation`, on Windows `%APPDATA%\EbooksReader\EbooksReader\notes\`), keyed by the contents entry, not by text position. If a file is damaged it is renamed to `.json.bad` and the app starts with no notes for that book instead of crashing.
+
 ## Image viewer
 
 A plain click on a book link that points to an image opens the original, full-size picture in a separate window; the main text stays where it is. You can also right-click any picture in the text and choose **Open image in viewer**, or double-click it. Further images reuse the same window, and it follows your color theme. It closes when you open another book or quit.
@@ -129,6 +148,7 @@ The code can sit inside a longer message. It contains only the name and the two 
 
 Settings are stored in the Windows registry under `HKEY_CURRENT_USER\Software\EbooksReader`:
 colors, your custom themes, text settings, window layout, last book, update-check preference and the reading position and bookmarks of each book.
+Notes are kept in files instead (see [Notes](#notes)).
 
 ## Updates
 
@@ -144,6 +164,12 @@ The app does not install updates itself: download the zip from the release page 
 The script sets the version in `src/ebooks_reader/version.py` and `pyproject.toml`, commits, creates the tag `vX.Y.Z` and pushes. GitHub Actions (`.github/workflows/release.yml`) then builds the exe on Windows and attaches `EbooksReader-vX.Y.Z.zip` to a new release. The build fails on purpose if the tag does not match `version.py`.
 
 The repository must be public for the update check to see the releases. The update source is set in `GITHUB_REPO` in `version.py`.
+
+## Tests
+
+```bash
+uv run pytest -q
+```
 
 ## Build a Windows executable
 
@@ -164,6 +190,7 @@ ebooks-reader/
   make_icon.py          # generates icon.ico from icon.svg
   run_app.py            # entry point for PyInstaller
   release.sh            # bump version, tag and push a release
+  tests/                # pytest tests
   .github/workflows/release.yml  # builds and publishes releases on tags
   src/ebooks_reader/
     __init__.py         # main()
@@ -184,6 +211,8 @@ ebooks-reader/
       image_viewer.py   # full-size image window (zoom, pan, save, copy)
       find_bar.py       # search bar (Ctrl+F)
       bookmarks.py      # bookmark model and storage helpers
+      notes.py          # notes storage (JSON file per book), export; no Qt widgets
+      notes_window.py   # notes window (contents tree + editor)
       themes.py         # built-in presets, custom themes, scheme sharing codes
       theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
@@ -219,6 +248,8 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
 - PDF is not supported yet (it would need a different viewer)
 - Bookmarks, Back positions and reading positions are character offsets in the book text; if a future version converts a book differently, old ones can point a little off
+- Notes, bookmarks and positions are tied to the book's file path: moving or renaming a book file loses them
+- Notes follow the order of the contents; a book whose contents change between loader versions may leave notes unattached (they stay in the file and appear under "Unattached notes" in the export)
 
 ## Ideas for later
 
@@ -227,5 +258,4 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - Chapter-based loading for large books
 - Recent books menu, drag-and-drop to open a file, Space / Page Down paging
 - Fullscreen reading mode (`F11`)
-- Highlight the current section in the contents tree
 - Installer (Inno Setup) with an in-app "Update now" button
