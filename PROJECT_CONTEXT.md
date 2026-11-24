@@ -4,7 +4,7 @@ Features, usage, structure, build and release: see README.md. This file only hol
 rules, the reasons behind design decisions, quirks, and the roadmap.
 
 Windows desktop e-book reader, Python 3.12, PySide6 (Qt), uv. Repo (public, the update check
-needs that): https://github.com/SaviolaX/ebook_reader. Only EPUB for now.
+needs that): https://github.com/SaviolaX/ebook_reader. EPUB and FB2 (FB2: code done, checks on real books pending).
 Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Goal: 1.0.0.
 
 ## How to work with me (the user)
@@ -54,6 +54,12 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   Positions, bookmarks and notes are tied to the md5 of the file path.
 - Reading position is restored with repeated scroll ticks while the layout settles.
 - Updates only notify and open the release page. No auto-install.
+- FB2 (`formats/fb2.py`, stdlib `xml.etree` only, namespaces ignored): chapter 0 = title page,
+  then one chapter per top-level section of the main body; a body with a `name` (notes) is one
+  chapter, so footnote links open the notes list. Sections without an id get generated anchors
+  (`c<n>___sec<k>`, deterministic by order) so they can hold notes. Contents: book title,
+  titled sections, then the notes body. Untitled sections add no entry; a book with no titled
+  sections falls back to "Section N". Headings: top-level section = h2, h1 = book title.
 
 ## Known quirks (don't re-discover these)
 - Qt ignores explicit font sizes inside real <h1>-<h6> blocks. Fix in use: `_prepared_html()`
@@ -138,7 +144,7 @@ says otherwise. Tick the box when done and commit this file.
 - [ ] **11. Fullscreen reading mode (F11),** like the image viewer; hide menu, status bar and
   contents; Esc leaves.
 - [ ] **12. Match counter in search** ("3 of 27") without making typing laggy on big books.
-- [ ] **13. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. HTML with
+- [x] **13. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. HTML with
   `c<chapter>_<id>` anchors, fill `LoadedBook.chapters`.
 - [ ] **14. TXT loader** (ask me about encoding detection and chapter splitting).
 

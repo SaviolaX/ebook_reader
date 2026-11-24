@@ -1,11 +1,12 @@
 # Ebooks Reader
 
 A simple desktop e-book reader for Windows, written in Python with PySide6 (Qt).
-Currently supports **EPUB**; the code is structured so more formats can be added.
+Currently supports **EPUB** and **FB2** (`.fb2`, `.fb2.zip`, `.fbz`); the code is structured so more formats can be added.
 
 ## Features
 
 - Continuous scrolling view of the whole book, with images
+- EPUB and FB2 books work the same way: contents, footnotes in the linked window, images, notes, bookmarks, search
 - Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
 - The contents tree follows your reading: the current section is highlighted and its parents are expanded
@@ -204,6 +205,7 @@ ebooks-reader/
     formats/
       __init__.py       # imports every loader so it self-registers
       epub.py           # EPUB loader
+      fb2.py            # FB2 loader (.fb2, .fb2.zip, .fbz)
     ui/
       main_window.py    # window, menus, contents tree, saved state
       reader_view.py    # scrolling text viewer
@@ -229,12 +231,12 @@ ebooks-reader/
    from ..core.models import LoadedBook
    from ..core.registry import register
 
-   @register("FB2", [".fb2", ".fb2.zip"])
-   def load_fb2(path: str) -> LoadedBook:
+   @register("TXT", [".txt"])
+   def load_txt(path: str) -> LoadedBook:
        ...
    ```
 
-2. Add one import line to `formats/__init__.py`: `from . import fb2`
+2. Add one import line to `formats/__init__.py`: `from . import txt`
 
 The open-file dialog and the window pick the new format up automatically.
 Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and fill
@@ -247,13 +249,14 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - Which link points to an image is detected by a heuristic in `formats/epub.py` (an element with an id right under a short image block counts as the image's caption); an unusual book can fool it
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
 - PDF is not supported yet (it would need a different viewer)
+- FB2: formatting is simplified (no paragraph indents); each top-level section is one chapter, and a notes body (footnotes) is one chapter, so a footnote link opens the whole notes list; only the first `.fb2` inside a zip is read
 - Bookmarks, Back positions and reading positions are character offsets in the book text; if a future version converts a book differently, old ones can point a little off
 - Notes, bookmarks and positions are tied to the book's file path: moving or renaming a book file loses them
 - Notes follow the order of the contents; a book whose contents change between loader versions may leave notes unattached (they stay in the file and appear under "Unattached notes" in the export)
 
 ## Ideas for later
 
-- FB2, TXT and other reflowable formats
+- TXT and other reflowable formats
 - PDF support
 - Chapter-based loading for large books
 - Recent books menu, drag-and-drop to open a file, Space / Page Down paging
