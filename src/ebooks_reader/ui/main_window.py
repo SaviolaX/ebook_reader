@@ -59,6 +59,9 @@ class MainWindow(QMainWindow):
         self.bookmarks: list[Bookmark] = []
         self._section_starts: list[int] = []  # sorted character offsets
         self._section_titles: list[str] = []
+        self._section_items: list[QTreeWidgetItem | None] = []
+        self._entry_items: dict[int, QTreeWidgetItem] = {}  # id(TocEntry) -> tree item
+        self._current_section = -1  # index into _section_starts
         self.image_viewer: ImageViewer | None = None
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
@@ -324,10 +327,12 @@ class MainWindow(QMainWindow):
             self.find_bar.close_bar()
             self.reader.set_book(book.html, book.resources, book.image_anchors)
             self.chapters = book.chapters
-            self._index_sections(book.toc)
             self.tree.clear()
+            self._entry_items = {}
+            self._current_section = -1
             self._add_entries(self.tree.invisibleRootItem(), book.toc)
             self.tree.expandToDepth(0)
+            self._index_sections(book.toc)
             self.setWindowTitle(f"{book.title} - {APP_TITLE}")
             self.current_path = path
             self.settings.setValue("last_book", path)
@@ -359,6 +364,7 @@ class MainWindow(QMainWindow):
     def _add_entries(self, parent, entries: list[TocEntry]):
         for e in entries:
             item = QTreeWidgetItem(parent, [e.title])
+            self._entry_items[id(e)] = item
             item.setData(0, Qt.ItemDataRole.UserRole, e.key)
             self._add_entries(item, e.children)
 
@@ -436,22 +442,53 @@ class MainWindow(QMainWindow):
     def _index_sections(self, toc: list[TocEntry]):
         """Remember where each contents entry starts, to name the current section."""
         anchors = self.reader.anchor_positions()
-        found: list[tuple[int, str]] = []
+        found: list[tuple[int, str, TocEntry]] = []
 
         def walk(entries):
             for e in entries:
                 if e.key in anchors:
-                    found.append((anchors[e.key], e.title))
+                    found.append((anchors[e.key], e.title, e))
                 walk(e.children)
 
         walk(toc)
         found.sort(key=lambda t: t[0])  # stable: a child follows its parent
-        self._section_starts = [p for p, _ in found]
-        self._section_titles = [t for _, t in found]
+        self._section_starts = [p for p, _, _ in found]
+        self._section_titles = [t for _, t, _ in found]
+        self._section_items = [self._entry_items.get(id(e)) for _, _, e in found]
+        self._current_section = -1
+
+    # a click on a contents entry can leave the top line a few characters
+    # before the anchor; look slightly ahead so the clicked section wins
+    SECTION_LOOKAHEAD = 10
+
+    def _section_index(self, pos: int) -> int:
+        return bisect_right(self._section_starts, pos + self.SECTION_LOOKAHEAD) - 1
 
     def _section_at(self, pos: int) -> str:
-        i = bisect_right(self._section_starts, pos) - 1
+        i = self._section_index(pos)
         return self._section_titles[i] if i >= 0 else ""
+
+    def _select_section(self, pos: int) -> None:
+        """Highlight the section at `pos` in the contents tree."""
+        i = self._section_index(pos)
+        if i == self._current_section:
+            return
+        self._current_section = i
+        item = self._section_items[i] if i >= 0 else None
+        self.tree.blockSignals(True)
+        try:
+            if item is None:
+                self.tree.setCurrentItem(None)
+                self.tree.clearSelection()
+            else:
+                parent = item.parent()
+                while parent is not None:
+                    parent.setExpanded(True)
+                    parent = parent.parent()
+                self.tree.setCurrentItem(item)
+                self.tree.scrollToItem(item)
+        finally:
+            self.tree.blockSignals(False)
 
     def _update_progress(self):
         if not self.current_path:
@@ -461,6 +498,7 @@ class MainWindow(QMainWindow):
         pos = self.reader.current_position()
         at_end = bar.maximum() > 0 and bar.value() >= bar.maximum()
         percent = 100 if at_end else self._percent_at(pos)
+        self._select_section(pos)
         title = self._section_at(pos)
         if len(title) > 60:
             title = title[:59] + "…"
