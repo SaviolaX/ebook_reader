@@ -24,4 +24,5 @@ build-backend = "uv_build"
 dev = [
     "pillow>=13.0.0",
     "pyinstaller>=6.22.3",
+    "pytest>=9.2.0",
 ]
