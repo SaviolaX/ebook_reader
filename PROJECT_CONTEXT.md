@@ -37,6 +37,8 @@ scrolling" feature was added after that; the next release number is the owner's 
   LoadedBook.resources; one instance is reused for every image.
 - ui/find_bar.py: FindBar, the Ctrl+F search bar under the text.
 - ui/bookmarks.py: Bookmark (pos, label) and load/save helpers (QSettings, JSON).
+- (planned, roadmap task 2) ui/notes.py + ui/notes_window.py: notes per contents entry and the
+  window that lists them.
 - ui/main_window.py: menus, contents tree, saved state, themes, updates, progress, and the
   contents-tree highlighting (see below).
 - ui/themes.py, theme_dialog.py: built-in/custom themes, light/dark groups, share codes "EBR1:...".
@@ -113,7 +115,7 @@ scrolling" feature was added after that; the next release number is the owner's 
   set_book/apply_typography call _forget_resize_position() afterwards. The resize restore
   only runs for WIDTH changes: a height-only change (find bar, status bar) must not restore,
   because it would clear the search selection and undo the scroll to the hit.
-- Qt doesn't keep an empty  anchor as a text fragment; it sits in the block's
+- Qt doesn't keep an empty anchor as a text fragment; it sits in the block's
   charFormat. anchor_positions() checks both, like QTextBrowser.scrollToAnchor does.
 - Image-link detection in epub.py is a heuristic (_has_image, _image_above): an element with an
   id directly under a short image block counts as that image's caption, so a footnote
@@ -154,57 +156,97 @@ scrolling" feature was added after that; the next release number is the owner's 
 Goal of 1.0.0: "I'm comfortable giving this to a stranger". Tasks are in priority order; do them
 top to bottom unless a dependency says otherwise. Tick the box when done and commit this file.
 
-### Phase 1: Ship what exists and clean up (quick wins)
-- [ ] **1. Cleanup.** Remove debug code (EBR_DEBUG, EBR_FRESH, and `_apply_headings` /
+### Phase 1: Ship what exists, add notes, clean up
+- [ ] **1. Verify and release the contents-tree follow feature.** Test on real books: the tree
+  follows scrolling, a click on an entry stays on that entry (if it flips to the previous one,
+  raise `SECTION_LOOKAHEAD`), nested contents behave acceptably. Commit `uv.lock`, then
+  `bash release.sh 0.4.0`.
+- [ ] **2. Notes per chapter and part.** I read a chapter and want to keep my main thoughts, so I
+  write notes for each chapter or part and see all of them in a separate window.
+  Wanted result in the notes window (one book at a time):
+  ```
+  Chapter #
+    Part #
+      some notes
+    Part #
+      some notes
+  Chapter #
+    ...
+  ```
+  Planned design (ask me before deviating):
+  - **Structure:** follows the contents tree (`TocEntry`): every contents entry can hold one note,
+    nested entries appear as nested parts. Entries without notes can be hidden or shown greyed
+    (a toggle in the window).
+  - **Window:** `ui/notes_window.py`, a separate non-modal `QMainWindow` like ImageViewer (one
+    instance reused, closes when another book opens, follows the color theme through
+    `apply_colors`). Left: tree of chapters and parts; right: a plain-text editor for the selected
+    entry. Edits autosave after a short pause, and on close.
+  - **Opening it:** new `Notes` menu: "Show notes..." (Ctrl+Shift+N?) and "Add note for current
+    section" (Ctrl+N?), which opens the window on the section at the top of the page
+    (`_section_index(current_position())`; reuse the contents-tree logic). Clicking a note's
+    title in the window jumps the main reader to that section (`go_to_anchor`, so Back works).
+    A small marker in the contents tree for entries that have a note is a nice extra.
+  - **Storage:** key notes by the contents entry's anchor key (`TocEntry.key`, e.g. `c3_part2`) plus
+    a snapshot of its title, NOT by character offset, so notes survive loader and layout changes.
+    Per book, under the same md5-of-path hash as positions and bookmarks (`notes/<hash>`),
+    JSON like `{key: {"title": ..., "text": ...}}`. Open question for me: QSettings (registry) is
+    fine for small notes, but long notes may be better in a JSON file in the user data folder
+    (`QStandardPaths.AppDataLocation`); decide together with task 7 (saved-data stability), and
+    include notes in its schema version and migration.
+  - **Extras, only if cheap:** search inside notes, "Copy all notes" / export to Markdown or TXT
+    (chapter and part headings followed by the text), and a note count in the window title.
+  - **Keep in mind:** notes must not break Back/Forward, search or progress; a book whose contents
+    are missing or flat (fallback "Section N" entries) still needs to work; add pytest cases for
+    the notes load/save helpers (a small `ui/notes.py` like `bookmarks.py`, no Qt widgets in it).
+- [ ] **3. Cleanup.** Remove debug code (EBR_DEBUG, EBR_FRESH, and `_apply_headings` /
   `_heading_css` if redundant). Resolve the h4/h3 size order (ask me). Switch the dependency to
   `pyside6-essentials` and check the build still works and is smaller. Add a LICENSE (MIT?) and
   a real description in `pyproject.toml`. Update the README (contents tree follows reading).
-- [x] **2. Pass**
 
 ### Phase 2: Trust and stability (must have for 1.0)
-- [ ] **3. Tests and CI.** pytest for `parse_version`, `export_theme`/`import_theme`,
+- [ ] **4. Tests and CI.** pytest for `parse_version`, `export_theme`/`import_theme`,
   `load_custom` with bad data, registry lookup (`.fb2.zip` style extensions), and the epub
   anchor/image detection (synthetic EPUB made with ebooklib as a fixture). Add ruff. Run both in
   `release.yml` before the build, so a broken release can't be published.
-- [ ] **4. Error handling on open.** Check a corrupted EPUB, a DRM-protected one, an empty file,
+- [ ] **5. Error handling on open.** Check a corrupted EPUB, a DRM-protected one, an empty file,
   a wrong extension, and a book moved or deleted since last time (reopen at startup must not
   crash). Show clear messages, never a traceback.
-- [ ] **5. SVG-wrapped images and covers.** Many EPUBs wrap the cover in `<svg><image>`; today the
+- [ ] **6. SVG-wrapped images and covers.** Many EPUBs wrap the cover in `<svg><image>`; today the
   loader deletes all SVG so the cover is empty. Convert `<svg><image xlink:href>` to a normal
   `<img>` and register the image as a resource.
-- [ ] **6. Saved-data stability (do BEFORE task 7).** Positions and bookmarks are character
+- [ ] **7. Saved-data stability (do BEFORE task 8).** Positions and bookmarks are character
   offsets keyed by the md5 of the file path: moving a file loses them and a loader change
   shifts them. Add a settings schema version with a migration step, and store a sturdier anchor
   (chapter index plus offset, or nearest anchor name). Consider keying books by content hash or
   by EPUB identifier instead of the path.
-- [ ] **7. Large-book performance.** The whole book is one Qt document (about 2 s for the art
+- [ ] **8. Large-book performance.** The whole book is one Qt document (about 2 s for the art
   book). Options: chapter-based loading in the main window, or `QWebEngineView` (the loader and
-  settings stay). Needs task 6 first because it changes how offsets work. Keep search, progress
+  settings stay). Needs task 7 first because it changes how offsets work. Keep search, progress
   percent, bookmarks, Back/Forward and the contents tree working.
 
 ### Phase 3: Reading experience people expect
-- [ ] **8. Drag-and-drop a file onto the window to open it, and a "Recent books" submenu in File.**
-- [ ] **9. Space / Shift+Space / Page Down / Page Up paging.**
-- [ ] **10. Fullscreen reading mode (F11),** like the image viewer; hide menu, status bar and
+- [ ] **9. Drag-and-drop a file onto the window to open it, and a "Recent books" submenu in File.**
+- [ ] **10. Space / Shift+Space / Page Down / Page Up paging.**
+- [ ] **11. Fullscreen reading mode (F11),** like the image viewer; hide menu, status bar and
   contents; Esc leaves.
-- [ ] **11. Match counter in search** ("3 of 27") without making typing laggy on big books.
-- [ ] **12. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. Produce HTML with
+- [ ] **12. Match counter in search** ("3 of 27") without making typing laggy on big books.
+- [ ] **13. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. Produce HTML with
   `c<chapter>_<id>` anchors and fill `LoadedBook.chapters`.
-- [ ] **13. TXT loader** (simple; ask me about encoding detection and chapter splitting).
+- [ ] **14. TXT loader** (simple; ask me about encoding detection and chapter splitting).
 
 ### Phase 4: Distribution and release readiness
-- [ ] **14. Installer.** Inno Setup installer with an "Update now" button (silent update), so no
+- [ ] **15. Installer.** Inno Setup installer with an "Update now" button (silent update), so no
   manual zip replacement. If it is too much for 1.0, state clearly in the README that the exe is
   unsigned and how to get past SmartScreen.
-- [ ] **15. Final documentation pass.** README features, usage table, project structure,
+- [ ] **16. Final documentation pass.** README features, usage table, project structure,
   known limitations; update this file's architecture and quirks.
-- [ ] **16. Release candidate.** Use the app on my real books for a while (long books, art books,
+- [ ] **17. Release candidate.** Use the app on my real books for a while (long books, art books,
   nested contents, several formats), fix what turns up, then `bash release.sh 1.0.0`.
 
 ### Not for 1.0 (after the release)
 - PDF support (needs QtPdf and a different viewer).
 - A back button in the link window.
 - Highlighting is done; a possible refinement is a setting to switch tree auto-expand off.
-- Replacing `QTextBrowser` with `QWebEngineView` only if chapter-based loading (task 7) is not
+- Replacing `QTextBrowser` with `QWebEngineView` only if chapter-based loading (task 8) is not
   fast enough.
 - Real auto-install of updates (beyond the installer's "Update now").
