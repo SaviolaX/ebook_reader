@@ -37,7 +37,7 @@ def run() -> None:
         target = sys.argv[1]
         QTimer.singleShot(50, lambda: win.open_book(target))
     else:
-        QTimer.singleShot(50, win.reopen_last_book)
+        QTimer.singleShot(50, win.startup_open)
 
     QTimer.singleShot(3000, win.startup_update_check)
 

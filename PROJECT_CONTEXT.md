@@ -53,6 +53,11 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   typography, window layout, last book, update preference, per-book position and bookmarks.
   Positions, bookmarks and notes are tied to the md5 of the file path.
 - Reading position is restored with repeated scroll ticks while the layout settles.
+- Startup: with no file argument, `startup_open()` shows `StartDialog` (recent books) unless
+  the setting `show_start` is off, which reopens the last book. This replaced `reopen_last`.
+  Recent books are a JSON list of absolute paths in `recent_books` (max 10, `ui/recent.py`);
+  a book is added only after it opened successfully. Missing files are shown greyed out in
+  the dialog and hidden in the File menu, but stay in the list (external drives).
 - Updates only notify and open the release page. No auto-install.
 - FB2 (`formats/fb2.py`, stdlib `xml.etree` only, namespaces ignored): chapter 0 = title page,
   then one chapter per top-level section of the main body; a body with a `name` (notes) is one
@@ -139,7 +144,8 @@ says otherwise. Tick the box when done and commit this file.
   notes working.
 
 ### Phase 3: Reading experience people expect
-- [ ] **9. Drag-and-drop a file onto the window to open it, and a "Recent books" submenu.**
+- [ ] **9. Drag-and-drop a file onto the window to open it.** (Start window and "Recent books"
+  submenu: done, pending checks on Windows.)
 - [ ] **10. Space / Shift+Space / Page Down / Page Up paging.**
 - [ ] **11. Fullscreen reading mode (F11),** like the image viewer; hide menu, status bar and
   contents; Esc leaves.

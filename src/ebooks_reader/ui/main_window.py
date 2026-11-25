@@ -28,6 +28,8 @@ from .image_viewer import ImageViewer
 from .notes import NoteStore, flatten
 from .notes_window import NotesWindow
 from .reader_view import ReaderView
+from .recent import add_recent, clear_recent, load_recent
+from .start_dialog import StartDialog
 from .themes import DEFAULT_THEME, THEMES, apply_palette
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
@@ -146,11 +148,19 @@ class MainWindow(QMainWindow):
         act_open.triggered.connect(self.open_dialog)
         m_file.addAction(act_open)
 
-        self.act_reopen = QAction("Reopen last book on startup", self)
-        self.act_reopen.setCheckable(True)
-        self.act_reopen.setChecked(self.settings.value("reopen_last", True, type=bool))
-        self.act_reopen.toggled.connect(lambda v: self.settings.setValue("reopen_last", v))
-        m_file.addAction(self.act_reopen)
+        self.m_recent = m_file.addMenu("Recent &books")
+        self.rebuild_recent_menu()
+
+        act_start = QAction("Show start &window...", self)
+        act_start.triggered.connect(self.show_start_dialog)
+        m_file.addAction(act_start)
+
+        # off: the last book is reopened at startup instead of showing the window
+        self.act_show_start = QAction("Show start window on startup", self)
+        self.act_show_start.setCheckable(True)
+        self.act_show_start.setChecked(self.settings.value("show_start", True, type=bool))
+        self.act_show_start.toggled.connect(lambda v: self.settings.setValue("show_start", v))
+        m_file.addAction(self.act_show_start)
 
         m_file.addSeparator()
         act_quit = QAction("&Quit", self)
@@ -358,6 +368,8 @@ class MainWindow(QMainWindow):
             self.setWindowTitle(f"{book.title} - {APP_TITLE}")
             self.current_path = path
             self.settings.setValue("last_book", path)
+            add_recent(self.settings, path)
+            self.rebuild_recent_menu()
             self.bookmarks = load_bookmarks(self.settings, _bookmarks_key(path))
             self._rebuild_bookmark_menu()
             self._load_notes(path, book)
@@ -371,9 +383,45 @@ class MainWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
 
-    def reopen_last_book(self):
-        if not self.settings.value("reopen_last", True, type=bool):
+    def rebuild_recent_menu(self):
+        self.m_recent.clear()
+        paths = [p for p in load_recent(self.settings) if Path(p).is_file()]
+        if not paths:
+            none = QAction("(no recent books)", self.m_recent)
+            none.setEnabled(False)
+            self.m_recent.addAction(none)
             return
+        for p in paths:
+            a = QAction(Path(p).name.replace("&", "&&"), self.m_recent)
+            a.setToolTip(p)
+            a.setStatusTip(p)
+            a.triggered.connect(lambda _=False, path=p: self.open_book(path))
+            self.m_recent.addAction(a)
+        self.m_recent.addSeparator()
+        clear = QAction("Clear list", self.m_recent)
+        clear.triggered.connect(self._clear_recent)
+        self.m_recent.addAction(clear)
+
+    def _clear_recent(self):
+        clear_recent(self.settings)
+        self.rebuild_recent_menu()
+
+    def startup_open(self):
+        """Called once after the window is shown, when no file was given."""
+        if self.settings.value("show_start", True, type=bool):
+            self.show_start_dialog()
+        else:
+            self.reopen_last_book()
+
+    def show_start_dialog(self):
+        dlg = StartDialog(self.settings, self)
+        dlg.exec()
+        # the checkbox in the dialog may have changed the setting
+        self.act_show_start.setChecked(self.settings.value("show_start", True, type=bool))
+        if dlg.chosen:
+            self.open_book(dlg.chosen)
+
+    def reopen_last_book(self):
         path = str(self.settings.value("last_book", ""))
         if path and Path(path).is_file():
             self.open_book(path)

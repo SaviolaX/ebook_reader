@@ -22,6 +22,7 @@ Currently supports **EPUB** and **FB2** (`.fb2`, `.fb2.zip`, `.fbz`); the code i
 - Bookmarks, saved per book
 - Notes per chapter and part, with a notes window, Markdown export and markers in the contents tree
 - Reading progress in the status bar: current section and percent
+- Start window at launch with your recent books (also `File → Recent books`)
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
 ## Requirements
@@ -66,7 +67,9 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Open an image full-size | Click a link that points to an image, or right-click a picture → "Open image in viewer", or double-click it |
 | Open an image link as text instead | `Ctrl+click` the link (opens the linked window at that place) |
 | Turn off separate link windows | `View → Open book links in separate window` |
-| Don't reopen the last book at startup | `File → Reopen last book on startup` |
+| Open a recently read book | `File → Recent books`, or the start window |
+| Show the start window again | `File → Show start window...` |
+| Skip the start window (reopen the last book instead) | Untick `File → Show start window on startup`, or the checkbox in the window |
 | Check for a new version | `Help → Check for updates...` |
 | Turn off the startup update check | `Help → Check for updates on startup` |
 | Show the version | `Help → About` |
@@ -148,7 +151,7 @@ The code can sit inside a longer message. It contains only the name and the two 
 ## Saved settings
 
 Settings are stored in the Windows registry under `HKEY_CURRENT_USER\Software\EbooksReader`:
-colors, your custom themes, text settings, window layout, last book, update-check preference and the reading position and bookmarks of each book.
+colors, your custom themes, text settings, window layout, last book, the recent books list, update-check preference and the reading position and bookmarks of each book.
 Notes are kept in files instead (see [Notes](#notes)).
 
 ## Updates
@@ -218,6 +221,8 @@ ebooks-reader/
       themes.py         # built-in presets, custom themes, scheme sharing codes
       theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
+      recent.py         # recent books list (stored in settings); no Qt widgets
+      start_dialog.py   # start window: recent books and Open another book...
     resources/
       icon.svg
       icon.ico
@@ -259,6 +264,6 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - TXT and other reflowable formats
 - PDF support
 - Chapter-based loading for large books
-- Recent books menu, drag-and-drop to open a file, Space / Page Down paging
+- Drag-and-drop to open a file, Space / Page Down paging
 - Fullscreen reading mode (`F11`)
 - Installer (Inno Setup) with an in-app "Update now" button
