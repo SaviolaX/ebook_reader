@@ -53,8 +53,12 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   typography, window layout, last book, update preference, per-book position and bookmarks.
   Positions, bookmarks and notes are tied to the md5 of the file path.
 - Reading position is restored with repeated scroll ticks while the layout settles.
-- Startup: with no file argument, `startup_open()` shows `StartDialog` (recent books) unless
-  the setting `show_start` is off, which reopens the last book. This replaced `reopen_last`.
+- Startup: `app.Controller` owns the launcher (`ui/launcher.py`, cards) and creates the
+  MainWindow only when a book is chosen. A file argument, or `show_start` off, skips the
+  launcher. This replaced `reopen_last`. A failed open hides the reader and shows the
+  launcher again. Covers: loaders fill `LoadedBook.cover`; `open_book` saves it to
+  `AppDataLocation/covers/<md5>.auto.png`; a user cover is `<md5>.custom.png` and wins.
+  Titles for the cards are cached in settings (`titles/<md5>`).
   Recent books are a JSON list of absolute paths in `recent_books` (max 10, `ui/recent.py`);
   a book is added only after it opened successfully. Missing files are shown greyed out in
   the dialog and hidden in the File menu, but stay in the list (external drives).

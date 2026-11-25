@@ -20,3 +20,4 @@ class LoadedBook:
     image_anchors: dict[str, str] = field(default_factory=dict)  # anchor -> image path
     # HTML of each chapter separately (chapter i has anchors named c<i>_...)
     chapters: list[str] = field(default_factory=list)
+    cover: bytes | None = None  # cover image file contents, if the book has one

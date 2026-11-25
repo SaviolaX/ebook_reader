@@ -57,3 +57,14 @@ def test_bad_data_gives_empty_list():
     assert load_recent(s) == []
     s.setValue("recent_books", json.dumps([1, "ok.epub", None]))
     assert load_recent(s) == ["ok.epub"]
+
+
+def test_titles_and_book_id(tmp_path):
+    from ebooks_reader.ui.recent import book_id, get_title, set_title
+
+    s = FakeSettings()
+    p = str(tmp_path / "a.epub")
+    assert get_title(s, p) == ""
+    set_title(s, p, "Моя книга")
+    assert get_title(s, p) == "Моя книга"
+    assert book_id(p) == book_id(str(tmp_path / "." / "a.epub"))

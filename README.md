@@ -22,7 +22,7 @@ Currently supports **EPUB** and **FB2** (`.fb2`, `.fb2.zip`, `.fbz`); the code i
 - Bookmarks, saved per book
 - Notes per chapter and part, with a notes window, Markdown export and markers in the contents tree
 - Reading progress in the status bar: current section and percent
-- Start window at launch with your recent books (also `File → Recent books`)
+- Start window at launch: your recent books as cards with covers (taken from the book, or add your own). The reader window opens only after you pick a book (also `File → Recent books`)
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
 ## Requirements
@@ -68,7 +68,8 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Open an image link as text instead | `Ctrl+click` the link (opens the linked window at that place) |
 | Turn off separate link windows | `View → Open book links in separate window` |
 | Open a recently read book | `File → Recent books`, or the start window |
-| Show the start window again | `File → Show start window...` |
+| Show the start window again | `File → Library...` |
+| Add your own cover to a book | Start window: select the card, `Set cover...` (or right-click it) |
 | Skip the start window (reopen the last book instead) | Untick `File → Show start window on startup`, or the checkbox in the window |
 | Check for a new version | `Help → Check for updates...` |
 | Turn off the startup update check | `Help → Check for updates on startup` |
@@ -222,7 +223,8 @@ ebooks-reader/
       theme_dialog.py   # theme editor window
       typography.py     # text settings and dialog
       recent.py         # recent books list (stored in settings); no Qt widgets
-      start_dialog.py   # start window: recent books and Open another book...
+      launcher.py       # start window: book cards, covers, Open another book...
+      covers.py         # cover cache (PNG files in the app data folder)
     resources/
       icon.svg
       icon.ico

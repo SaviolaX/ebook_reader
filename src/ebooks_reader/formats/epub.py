@@ -83,6 +83,30 @@ def _img_name(tag, doc_name: str) -> str:
     return _resolve(doc_name, src)[0]
 
 
+def _find_cover(book, resources: dict[str, bytes]) -> bytes | None:
+    """Cover image bytes of an EPUB, or None."""
+    try:
+        for _value, attrs in book.get_metadata("OPF", "cover"):
+            item = book.get_item_with_id((attrs or {}).get("content", ""))
+            if item is not None and (item.media_type or "").startswith("image/"):
+                data = item.get_content()
+                if data:
+                    return data
+    except Exception:
+        pass
+    try:
+        for item in book.get_items_of_type(ebooklib.ITEM_COVER):
+            data = item.get_content()
+            if data:
+                return data
+    except Exception:
+        pass
+    for name, data in resources.items():
+        if "cover" in posixpath.basename(name).lower():
+            return data
+    return None
+
+
 @register("EPUB", [".epub"])
 def load_epub(path: str) -> LoadedBook:
     book = epub.read_epub(path, options={"ignore_ncx": False})
@@ -210,4 +234,5 @@ def load_epub(path: str) -> LoadedBook:
         resources=resources,
         image_anchors=image_keys,
         chapters=parts,
+        cover=_find_cover(book, resources),
     )

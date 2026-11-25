@@ -391,4 +391,5 @@ def load_fb2(path: str) -> LoadedBook:
         resources=resources,
         image_anchors=conv.image_anchors,
         chapters=parts,
+        cover=resources.get(cover_name) if cover_name else None,
     )

@@ -3,10 +3,11 @@
 No Qt widgets here, so it can be tested alone (any object with value()/setValue() works).
 """
 
+import hashlib
 import json
 import os
 
-MAX_RECENT = 10
+MAX_RECENT = 24
 _KEY = "recent_books"
 
 
@@ -44,3 +45,16 @@ def remove_recent(settings, path: str) -> None:
 
 def clear_recent(settings) -> None:
     save_recent(settings, [])
+
+
+def book_id(path: str) -> str:
+    """Same md5 as the reading position / bookmark / note keys."""
+    return hashlib.md5(_norm(path).encode("utf-8")).hexdigest()
+
+
+def set_title(settings, path: str, title: str) -> None:
+    settings.setValue(f"titles/{book_id(path)}", title)
+
+
+def get_title(settings, path: str) -> str:
+    return str(settings.value(f"titles/{book_id(path)}", "") or "")
