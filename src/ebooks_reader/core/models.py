@@ -21,3 +21,6 @@ class LoadedBook:
     # HTML of each chapter separately (chapter i has anchors named c<i>_...)
     chapters: list[str] = field(default_factory=list)
     cover: bytes | None = None  # cover image file contents, if the book has one
+    # PDF books are fixed-layout: no HTML, the PDF viewer opens the file itself
+    pdf_path: str | None = None
+    page_count: int = 0

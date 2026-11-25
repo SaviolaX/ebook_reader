@@ -4,7 +4,7 @@ Features, usage, structure, build and release: see README.md. This file only hol
 rules, the reasons behind design decisions, quirks, and the roadmap.
 
 Windows desktop e-book reader, Python 3.12, PySide6 (Qt), uv. Repo (public, the update check
-needs that): https://github.com/SaviolaX/ebook_reader. EPUB and FB2 (FB2: code done, checks on real books pending).
+needs that): https://github.com/SaviolaX/ebook_reader. EPUB, FB2 and PDF (FB2 and PDF: code done, checks on real books pending).
 Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Goal: 1.0.0.
 
 ## How to work with me (the user)
@@ -69,6 +69,15 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   (`c<n>___sec<k>`, deterministic by order) so they can hold notes. Contents: book title,
   titled sections, then the notes body. Untitled sections add no entry; a book with no titled
   sections falls back to "Section N". Headings: top-level section = h2, h1 = book title.
+- PDF (`formats/pdf.py` loader, `ui/pdf_view.py` viewer; QtPdf renders the pages): the book has
+  no HTML, only `pdf_path`. MainWindow keeps two views in a QStackedWidget and `self.reader`
+  points at the one showing now (`is_pdf`). The viewer is our own QAbstractScrollArea, not
+  QPdfView, because every page is recolored (white -> background, black -> text color;
+  "original colors" turns it off). A position is one int, `page * 100000 + fraction of the
+  page`, so bookmarks, Back/Forward and the saved position work unchanged. Anchor keys are
+  `p<page>`; outline entries land on the top of the page (their y-offsets are ignored). No
+  outline: "Page N" entries, grouped by 10 or 50 for long books. Text settings are disabled
+  for PDF; Ctrl+= / Ctrl+- zoom. Step 2 still open: search in PDF, tests, notes checks on PDF.
 
 ## Known quirks (don't re-discover these)
 - Qt ignores explicit font sizes inside real <h1>-<h6> blocks. Fix in use: `_prepared_html()`
@@ -97,8 +106,9 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   book; changing the loader or the document structure shifts them.
 - uv.lock can show an older project version than pyproject.toml. `release.sh` doesn't commit
   uv.lock and refuses to run with uncommitted changes, so commit uv.lock first.
-- pyproject depends on `pyside6`, which pulls in WebEngine and PDF modules the app doesn't
-  use (big builds). `pyside6-essentials` is enough for the current code.
+- pyproject depends on `pyside6`, which pulls in WebEngine (unused, big builds). The app now
+  uses QtPdf for PDF books, which `pyside6-essentials` does not have: when slimming the
+  dependencies (task 3) keep QtPdf (`pyside6-pdf`, a separate package in uv.lock).
 - README and HEADING_LEVELS agree that h4 (1.3x) is larger than h3 (1.2x); probably a typo.
   Ask me before changing it, and update the README table with it.
 - Leftover debug code: `_apply_headings`, `_heading_css`, EBR_DEBUG prints in reader_view.py
@@ -157,6 +167,10 @@ says otherwise. Tick the box when done and commit this file.
 - [x] **13. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. HTML with
   `c<chapter>_<id>` anchors, fill `LoadedBook.chapters`.
 - [ ] **14. TXT loader** (ask me about encoding detection and chapter splitting).
+- [ ] **14b. PDF support.** Step 1 (viewing: open, zoom, colors, contents, positions,
+  bookmarks, Back/Forward, cover) is committed, pending checks on real PDFs on Windows and in
+  the PyInstaller build. Step 2: search in PDF, tests (loader, position math), notes checks
+  on PDF, drag-and-drop.
 
 ### Phase 4: Distribution and release readiness
 - [ ] **15. Installer.** Inno Setup with an "Update now" button (silent update). If too much
@@ -167,7 +181,6 @@ says otherwise. Tick the box when done and commit this file.
   books, nested contents, several formats), fix what turns up, then `bash release.sh 1.0.0`.
 
 ### Not for 1.0 (after the release)
-- PDF support (needs QtPdf and a different viewer).
 - A back button in the link window.
 - A setting to switch tree auto-expand off.
 - `QTextBrowser` -> `QWebEngineView` only if chapter-based loading (task 8) isn't fast enough.

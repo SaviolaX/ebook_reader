@@ -1,12 +1,13 @@
 # Ebooks Reader
 
 A simple desktop e-book reader for Windows, written in Python with PySide6 (Qt).
-Currently supports **EPUB** and **FB2** (`.fb2`, `.fb2.zip`, `.fbz`); the code is structured so more formats can be added.
+Currently supports **EPUB**, **FB2** (`.fb2`, `.fb2.zip`, `.fbz`) and **PDF**; the code is structured so more formats can be added.
 
 ## Features
 
 - Continuous scrolling view of the whole book, with images
 - EPUB and FB2 books work the same way: contents, footnotes in the linked window, images, notes, bookmarks, search
+- PDF books: pages with zoom, your color themes, the PDF's own contents, bookmarks, Back / Forward and reading position (no font settings; search in PDF is not available yet)
 - Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
 - The contents tree follows your reading: the current section is highlighted and its parents are expanded
@@ -59,6 +60,8 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Add a note for the current section | `Notes → Add note for current section` (`Ctrl+N`) |
 | Text settings | `View → Text settings...` (`Ctrl+T`) |
 | Larger / smaller font | `Ctrl+=` / `Ctrl+-` |
+| Zoom a PDF | `Ctrl+=` / `Ctrl+-` or `Ctrl` + mouse wheel; `Ctrl+1` fit width, `Ctrl+2` fit page, `Ctrl+3` actual size (`View` menu) |
+| Show PDF pages in their original colors | `View → PDF: original colors` |
 | Change colors | `Theme` menu (built-in and your own schemes) |
 | Create or edit color schemes | `Theme → Edit themes...` (`Ctrl+Shift+T`) |
 | Open a link in the linked window | Click the link (default) |
@@ -210,10 +213,12 @@ ebooks-reader/
       __init__.py       # imports every loader so it self-registers
       epub.py           # EPUB loader
       fb2.py            # FB2 loader (.fb2, .fb2.zip, .fbz)
+      pdf.py            # PDF loader (contents, cover); pages are drawn by ui/pdf_view.py
     ui/
       main_window.py    # window, menus, contents tree, saved state
       reader_view.py    # scrolling text viewer
       viewer_window.py  # window for opened links (one chapter at a time)
+      pdf_view.py       # PDF page viewer (zoom, recolored pages, positions as page + fraction)
       image_viewer.py   # full-size image window (zoom, pan, save, copy)
       find_bar.py       # search bar (Ctrl+F)
       bookmarks.py      # bookmark model and storage helpers
@@ -255,7 +260,8 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - Qt's text widget renders a simplified subset of HTML; SVG images are removed, so images wrapped in SVG can't be shown or opened in the viewer
 - Which link points to an image is detected by a heuristic in `formats/epub.py` (an element with an id right under a short image block counts as the image's caption); an unusual book can fool it
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
-- PDF is not supported yet (it would need a different viewer)
+- PDF: pages are fixed-layout, so font, font size, line spacing and margins don't apply (use zoom); your colors are applied by recoloring the rendered pages, which also tints pictures (`View → PDF: original colors` turns this off)
+- PDF: no search yet, no password-protected files, no OCR for scanned PDFs; a contents entry lands on the top of its page; there is no separate link window or image viewer
 - FB2: formatting is simplified (no paragraph indents); each top-level section is one chapter, and a notes body (footnotes) is one chapter, so a footnote link opens the whole notes list; only the first `.fb2` inside a zip is read
 - Bookmarks, Back positions and reading positions are character offsets in the book text; if a future version converts a book differently, old ones can point a little off
 - Notes, bookmarks and positions are tied to the book's file path: moving or renaming a book file loses them
@@ -264,7 +270,7 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 ## Ideas for later
 
 - TXT and other reflowable formats
-- PDF support
+- Search inside PDF books
 - Chapter-based loading for large books
 - Drag-and-drop to open a file, Space / Page Down paging
 - Fullscreen reading mode (`F11`)

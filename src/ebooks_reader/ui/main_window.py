@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QMessageBox,
+    QStackedWidget,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -27,6 +28,7 @@ from .find_bar import FindBar
 from .image_viewer import ImageViewer
 from .notes import NoteStore, flatten
 from .notes_window import NotesWindow
+from .pdf_view import PdfView
 from .reader_view import ReaderView
 from .covers import save_auto_cover
 from .recent import add_recent, clear_recent, load_recent, set_title
@@ -77,18 +79,26 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(APP_TITLE)
         self.resize(1100, 800)
 
-        self.reader = ReaderView()
+        self.text_reader = ReaderView()
+        self.reader = self.text_reader  # the view showing now: text reader or PDF view
         self.reader.linkRequested.connect(self.open_link_window)
         self.reader.imageRequested.connect(self.open_image)
         self.reader.history_enabled = True
         self.reader.historyChanged.connect(self._update_history_actions)
         self.reader.links_in_window = self.settings.value("links_in_window", True, type=bool)
-        self.find_bar = FindBar(self.reader)
+        self.find_bar = FindBar(self.text_reader)
+        self.pdf_view = PdfView()
+        self.pdf_view.history_enabled = True
+        self.pdf_view.historyChanged.connect(self._update_history_actions)
+        self.pdf_view.zoomChanged.connect(self._show_zoom)
+        self.stack = QStackedWidget()
+        self.stack.addWidget(self.text_reader)
+        self.stack.addWidget(self.pdf_view)
         central = QWidget()
         box = QVBoxLayout(central)
         box.setContentsMargins(0, 0, 0, 0)
         box.setSpacing(0)
-        box.addWidget(self.reader, 1)
+        box.addWidget(self.stack, 1)
         box.addWidget(self.find_bar)
         self.setCentralWidget(central)
 
@@ -97,9 +107,10 @@ class MainWindow(QMainWindow):
         self._save_timer.setSingleShot(True)
         self._save_timer.setInterval(1000)
         self._save_timer.timeout.connect(self._save_position)
-        self.reader.verticalScrollBar().valueChanged.connect(
-            lambda _: self._save_timer.start()
-        )
+        for view in (self.text_reader, self.pdf_view):
+            view.verticalScrollBar().valueChanged.connect(
+                lambda _: self._save_timer.start()
+            )
 
         # reading progress in the status bar (refreshed 120 ms after scrolling)
         self.progress_label = QLabel("")
@@ -109,9 +120,10 @@ class MainWindow(QMainWindow):
         self._progress_timer.setSingleShot(True)
         self._progress_timer.setInterval(120)
         self._progress_timer.timeout.connect(self._update_progress)
-        self.reader.verticalScrollBar().valueChanged.connect(
-            lambda _: self._progress_timer.start()
-        )
+        for view in (self.text_reader, self.pdf_view):
+            view.verticalScrollBar().valueChanged.connect(
+                lambda _: self._progress_timer.start()
+            )
 
         self.tree = QTreeWidget()
         self.tree.setHeaderHidden(True)
@@ -132,7 +144,7 @@ class MainWindow(QMainWindow):
             str(self.settings.value("fg", default_fg)),
         )
         self.typography = Typography.load(self.settings)
-        self.reader.apply_typography(self.typography)
+        self.text_reader.apply_typography(self.typography)
 
         geometry = self.settings.value("geometry")
         if geometry:
@@ -176,15 +188,15 @@ class MainWindow(QMainWindow):
         m_edit = self.menuBar().addMenu("&Edit")
         act_find = QAction("&Find in book...", self)
         act_find.setShortcut("Ctrl+F")
-        act_find.triggered.connect(self.find_bar.open)
+        act_find.triggered.connect(self.open_find)
         m_edit.addAction(act_find)
         act_find_next = QAction("Find &next", self)
         act_find_next.setShortcut("F3")
-        act_find_next.triggered.connect(self.find_bar.find_next)
+        act_find_next.triggered.connect(lambda: self._find_step(False))
         m_edit.addAction(act_find_next)
         act_find_prev = QAction("Find &previous", self)
         act_find_prev.setShortcut("Shift+F3")
-        act_find_prev.triggered.connect(self.find_bar.find_prev)
+        act_find_prev.triggered.connect(lambda: self._find_step(True))
         m_edit.addAction(act_find_prev)
 
         m_view = self.menuBar().addMenu("&View")
@@ -211,6 +223,7 @@ class MainWindow(QMainWindow):
         a_text = QAction("&Text settings...", self)
         a_text.setShortcut("Ctrl+T")
         a_text.triggered.connect(self.open_text_settings)
+        self.act_text = a_text
         m_view.addAction(a_text)
         zin = QAction("Larger font", self)
         zin.setShortcut("Ctrl+=")
@@ -220,17 +233,37 @@ class MainWindow(QMainWindow):
         zout.triggered.connect(lambda: self.change_size(-1))
         m_view.addAction(zin)
         m_view.addAction(zout)
+        m_view.addSeparator()
+        self.pdf_actions: list[QAction] = []
+        for text, key, fn in (
+            ("PDF: fit width", "Ctrl+1", lambda: self.pdf_view.set_fit("width")),
+            ("PDF: fit page", "Ctrl+2", lambda: self.pdf_view.set_fit("page")),
+            ("PDF: actual size", "Ctrl+3", lambda: self.pdf_view.actual_size()),
+        ):
+            a = QAction(text, self)
+            a.setShortcut(key)
+            a.triggered.connect(fn)
+            m_view.addAction(a)
+            self.pdf_actions.append(a)
+        self.act_original = QAction("PDF: original colors", self)
+        self.act_original.setCheckable(True)
+        self.act_original.setChecked(self.settings.value("pdf_original_colors", False, type=bool))
+        self.pdf_view.set_original_colors(self.act_original.isChecked())
+        self.act_original.toggled.connect(self._set_original_colors)
+        m_view.addAction(self.act_original)
+        self.pdf_actions.append(self.act_original)
 
         m_go = self.menuBar().addMenu("&Go")
         self.act_back = QAction("&Back", self)
         self.act_back.setShortcut("Alt+Left")
-        self.act_back.triggered.connect(self.reader.go_back)
+        self.act_back.triggered.connect(lambda: self.reader.go_back())
         m_go.addAction(self.act_back)
         self.act_forward = QAction("&Forward", self)
         self.act_forward.setShortcut("Alt+Right")
-        self.act_forward.triggered.connect(self.reader.go_forward)
+        self.act_forward.triggered.connect(lambda: self.reader.go_forward())
         m_go.addAction(self.act_forward)
         self._update_history_actions()
+        self._update_view_actions()
 
         self.m_bookmarks = self.menuBar().addMenu("&Bookmarks")
         act_add_bm = QAction("&Add bookmark here", self)
@@ -308,7 +341,8 @@ class MainWindow(QMainWindow):
     def apply_colors(self, bg: str, fg: str):
         self.bg, self.fg = bg, fg
         apply_palette(self.tree, bg, fg)
-        self.reader.apply_colors(bg, fg)
+        self.text_reader.apply_colors(bg, fg)
+        self.pdf_view.apply_colors(bg, fg)
         for w in self.extra_windows:
             w.reader.apply_colors(bg, fg)
         if self.image_viewer is not None:
@@ -335,13 +369,16 @@ class MainWindow(QMainWindow):
             self.set_typography(dlg.result_value())
 
     def change_size(self, delta: int):
+        if self.is_pdf:  # no font settings in a PDF: the same keys zoom the pages
+            self.pdf_view.zoom_by(1.1 if delta > 0 else 1 / 1.1)
+            return
         size = max(6, min(72, self.typography.size + delta))
         self.set_typography(replace(self.typography, size=size))
 
     def set_typography(self, t: Typography):
         self.typography = t
         t.save(self.settings)
-        self.reader.apply_typography(t)
+        self.text_reader.apply_typography(t)
         for w in self.extra_windows:
             w.reader.apply_typography(t)
 
@@ -363,7 +400,7 @@ class MainWindow(QMainWindow):
             if self.notes_window is not None:
                 self.notes_window.close()  # saves its note first
             self.find_bar.close_bar()
-            self.reader.set_book(book.html, book.resources, book.image_anchors)
+            self._show_book_view(book)
             self.chapters = book.chapters
             self.tree.clear()
             self._entry_items = {}
@@ -447,12 +484,60 @@ class MainWindow(QMainWindow):
             self.act_back.setEnabled(self.reader.can_go_back())
             self.act_forward.setEnabled(self.reader.can_go_forward())
 
+    # ---------- text / PDF view ----------
+    @property
+    def is_pdf(self) -> bool:
+        return self.reader is self.pdf_view
+
+    def _show_book_view(self, book) -> None:
+        """Show the book in the text reader, or in the PDF view for a PDF."""
+        if book.pdf_path:
+            self.pdf_view.open_pdf(book.pdf_path)  # raises before anything changes if unreadable
+            self.text_reader.set_book("", {}, None)  # free the previous text book
+            self.reader = self.pdf_view
+            self.stack.setCurrentWidget(self.pdf_view)
+        else:
+            self.pdf_view.close_pdf()
+            self.reader = self.text_reader
+            self.stack.setCurrentWidget(self.text_reader)
+            self.reader.set_book(book.html, book.resources, book.image_anchors)
+        self._update_view_actions()
+        self._update_history_actions()
+
+    def _update_view_actions(self) -> None:
+        pdf = self.is_pdf
+        self.act_text.setEnabled(not pdf)  # a PDF has no font settings
+        for a in self.pdf_actions:
+            a.setEnabled(pdf)
+
+    def _set_original_colors(self, on: bool) -> None:
+        self.settings.setValue("pdf_original_colors", on)
+        self.pdf_view.set_original_colors(on)
+
+    def _show_zoom(self) -> None:
+        self.statusBar().showMessage(f"Zoom {self.pdf_view.zoom_percent()}%", 2000)
+
+    def open_find(self) -> None:
+        if self.is_pdf:
+            self.statusBar().showMessage("Search in PDF books is not available yet", 4000)
+            return
+        self.find_bar.open()
+
+    def _find_step(self, backwards: bool) -> None:
+        if self.is_pdf:
+            return
+        (self.find_bar.find_prev if backwards else self.find_bar.find_next)()
+
     # ---------- bookmarks ----------
     def _percent_at(self, pos: int) -> int:
+        if self.is_pdf:
+            return self.pdf_view.percent_at(pos)
         total = max(self.reader.document().characterCount() - 1, 1)
         return min(100, int(pos * 100 / total))
 
     def _snippet(self, pos: int, length: int = 60) -> str:
+        if self.is_pdf:
+            return self.pdf_view.label_at(pos)
         doc = self.reader.document()
         cur = QTextCursor(doc)
         cur.setPosition(max(0, min(pos, doc.characterCount() - 1)))
@@ -634,7 +719,7 @@ class MainWindow(QMainWindow):
 
     # ---------- extra windows ----------
     def set_links_in_window(self, value: bool):
-        self.reader.links_in_window = value
+        self.text_reader.links_in_window = value
         self.settings.setValue("links_in_window", value)
 
     def open_link_window(self, fragment: str, force_new: bool = False):
