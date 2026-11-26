@@ -7,7 +7,7 @@ Currently supports **EPUB**, **FB2** (`.fb2`, `.fb2.zip`, `.fbz`) and **PDF**; t
 
 - Continuous scrolling view of the whole book, with images
 - EPUB and FB2 books work the same way: contents, footnotes in the linked window, images, notes, bookmarks, search
-- PDF books: pages with zoom, your color themes, the PDF's own contents, bookmarks, Back / Forward and reading position (no font settings; search in PDF is not available yet)
+- PDF books: pages with a page number under each one, zoom, your color themes, the PDF's own contents, bookmarks, Back / Forward and reading position (no font settings; search in PDF is not available yet)
 - Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
 - The contents tree follows your reading: the current section is highlighted and its parents are expanded

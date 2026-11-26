@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QAbstractScrollArea
 
 POS_SCALE = 100_000
 MARGIN = 12  # px around the pages
-GAP = 12  # px between pages
+GAP = 28  # px between pages (the page number is drawn in it)
 POINT_TO_PX = 96 / 72  # 100% zoom = 96 dpi
 ZOOM_MIN, ZOOM_MAX = 0.1, 8.0
 CACHE_BYTES = 160 * 1024 * 1024  # rendered pages kept in memory
@@ -205,7 +205,7 @@ class PdfView(QAbstractScrollArea):
         for h in self._h:
             self._tops.append(y)
             y += h + GAP
-        self._total_h = y - GAP + MARGIN
+        self._total_h = y  # the last page keeps room for its number too
         self._total_w = max(self._w) + 2 * MARGIN
         vp = self.viewport()
         vbar, hbar = self.verticalScrollBar(), self.horizontalScrollBar()
@@ -413,7 +413,11 @@ class PdfView(QAbstractScrollArea):
         v = self.verticalScrollBar().value()
         hx = self.horizontalScrollBar().value()
         dpr = self.devicePixelRatioF()
-        p.setPen(QPen(_mix(bg, fg, 0.3), 1))
+        border = _mix(bg, fg, 0.3)
+        label_color = _mix(bg, fg, 0.7)
+        font = self.font()
+        font.setPointSize(9)
+        p.setFont(font)
         p.setBrush(Qt.BrushStyle.NoBrush)
         for i in range(max(0, bisect_right(self._tops, v) - 1), self.page_count):
             top = self._tops[i] - v
@@ -422,10 +426,17 @@ class PdfView(QAbstractScrollArea):
             w, h = self._w[i], self._h[i]
             x = (max(vw, self._total_w) - w) // 2 - hx
             rect = QRect(x, top, w, h)
-            if not rect.intersects(event.rect()):
+            if not rect.adjusted(0, 0, 0, GAP).intersects(event.rect()):
                 continue
             img = self._page_image(i, w, h, dpr)
             if img is not None:
                 p.drawImage(rect, img)
+            p.setPen(QPen(border, 1))
             p.drawRect(rect.adjusted(-1, -1, 0, 0))
+            p.setPen(QPen(label_color, 1))
+            p.drawText(
+                QRect(x, top + h, w, GAP),
+                Qt.AlignmentFlag.AlignCenter,
+                f"{i + 1} / {self.page_count}",
+            )
         p.end()

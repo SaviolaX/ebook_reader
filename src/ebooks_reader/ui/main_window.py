@@ -657,7 +657,11 @@ class MainWindow(QMainWindow):
         title = self._section_at(pos)
         if len(title) > 60:
             title = title[:59] + "…"
-        self.progress_label.setText(f"{title}  ·  {percent}%" if title else f"{percent}%")
+        parts = [title] if title else []
+        if self.is_pdf:
+            parts.append(self.pdf_view.label_at(pos))
+        parts.append(f"{percent}%")
+        self.progress_label.setText("  ·  ".join(parts))
 
     # ---------- notes ----------
     def _notes_dir(self) -> Path:
