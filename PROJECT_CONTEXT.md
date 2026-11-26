@@ -77,7 +77,11 @@ Released: 0.3.1. Next release number is the owner's choice (0.4.0 suggested). Go
   page`, so bookmarks, Back/Forward and the saved position work unchanged. Anchor keys are
   `p<page>`; outline entries land on the top of the page (their y-offsets are ignored). No
   outline: "Page N" entries, grouped by 10 or 50 for long books. Text settings are disabled
-  for PDF; Ctrl+= / Ctrl+- zoom. Step 2 still open: search in PDF, tests, notes checks on PDF.
+  for PDF; Ctrl+= / Ctrl+- zoom. Search in PDF uses the same FindBar, which calls
+  `PdfView.pdf_search` (page text from `getAllText`, highlight rectangles from
+  `getSelectionAtIndex`); it needs a text layer and has no match counter. Notes work through
+  the same `p<page>` keys. Tests: `tests/test_pdf.py` (own tiny PDF writer in
+  `tests/pdf_helpers.py`, no extra dependency).
 
 ## Known quirks (don't re-discover these)
 - Qt ignores explicit font sizes inside real <h1>-<h6> blocks. Fix in use: `_prepared_html()`
@@ -158,8 +162,9 @@ says otherwise. Tick the box when done and commit this file.
   notes working.
 
 ### Phase 3: Reading experience people expect
-- [ ] **9. Drag-and-drop a file onto the window to open it.** (Start window and "Recent books"
-  submenu: done, pending checks on Windows.)
+- [ ] **9. Drag-and-drop a file onto the window to open it.** Code done for the reader and
+  the start window, pending checks on Windows. (Start window and "Recent books" submenu:
+  done, pending checks on Windows.)
 - [ ] **10. Space / Shift+Space / Page Down / Page Up paging.**
 - [ ] **11. Fullscreen reading mode (F11),** like the image viewer; hide menu, status bar and
   contents; Esc leaves.
@@ -167,10 +172,9 @@ says otherwise. Tick the box when done and commit this file.
 - [x] **13. FB2 loader** (`.fb2`, `.fb2.zip`), proves the registry design. HTML with
   `c<chapter>_<id>` anchors, fill `LoadedBook.chapters`.
 - [ ] **14. TXT loader** (ask me about encoding detection and chapter splitting).
-- [ ] **14b. PDF support.** Step 1 (viewing: open, zoom, colors, contents, positions,
-  bookmarks, Back/Forward, cover) is committed, pending checks on real PDFs on Windows and in
-  the PyInstaller build. Step 2: search in PDF, tests (loader, position math), notes checks
-  on PDF, drag-and-drop.
+- [ ] **14b. PDF support.** Code done (viewing, zoom, colors, contents, positions, bookmarks,
+  Back/Forward, cover, search, notes, tests). Pending checks on real PDFs on Windows: search,
+  notes window on a PDF, scanned and very large PDFs, and the PyInstaller build.
 
 ### Phase 4: Distribution and release readiness
 - [ ] **15. Installer.** Inno Setup with an "Update now" button (silent update). If too much

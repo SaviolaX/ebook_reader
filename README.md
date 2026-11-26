@@ -7,7 +7,7 @@ Currently supports **EPUB**, **FB2** (`.fb2`, `.fb2.zip`, `.fbz`) and **PDF**; t
 
 - Continuous scrolling view of the whole book, with images
 - EPUB and FB2 books work the same way: contents, footnotes in the linked window, images, notes, bookmarks, search
-- PDF books: pages with a page number under each one, zoom, your color themes, the PDF's own contents, bookmarks, Back / Forward and reading position (no font settings; search in PDF is not available yet)
+- PDF books: pages with a page number under each one, zoom, your color themes, the PDF's own contents, bookmarks, Back / Forward and reading position, search and notes (no font settings)
 - Images open full-size in a separate viewer window (zoom, pan, save, copy, fullscreen)
 - Contents tree in a side panel (click or press Enter to jump, expand/collapse all)
 - The contents tree follows your reading: the current section is highlighted and its parents are expanded
@@ -23,6 +23,7 @@ Currently supports **EPUB**, **FB2** (`.fb2`, `.fb2.zip`, `.fbz`) and **PDF**; t
 - Bookmarks, saved per book
 - Notes per chapter and part, with a notes window, Markdown export and markers in the contents tree
 - Reading progress in the status bar: current section and percent
+- Drag a book file onto the reader or the start window to open it
 - Start window at launch: your recent books as cards with covers (taken from the book, or add your own). The reader window opens only after you pick a book (also `File → Recent books`)
 - Remembers the last opened book, reading position per book, window layout, colors and text settings
 
@@ -51,6 +52,7 @@ uv run ebooks-reader "C:/path/to/book.epub"
 | Action | How |
 | --- | --- |
 | Open a book | `File → Open...` (`Ctrl+O`) |
+| Open a book by dropping it | Drag a book file onto the reader or the start window |
 | Show/hide contents | `View → Show contents` (`F9`) |
 | Search in the book | `Edit → Find in book...` (`Ctrl+F`); `Enter` / `Shift+Enter` or `F3` / `Shift+F3` = next / previous; `Esc` closes the bar |
 | Go back / forward after a jump | `Go → Back` (`Alt+Left`) / `Go → Forward` (`Alt+Right`), or the mouse side buttons |
@@ -115,6 +117,7 @@ Write your own notes for each chapter or part and read them all in one window. N
 - **Copy all notes** and **Export Markdown...** produce chapter and part headings followed by your text. Entries without notes are left out.
 - Entries that have no link target in the book (greyed out) can't hold a note.
 - Clearing the text of a note deletes it.
+- PDF books work the same way: one note per contents entry (or per group of pages when the PDF has no outline).
 
 Notes are stored per book in a JSON file in the app data folder (Qt's `AppDataLocation`, on Windows `%APPDATA%\EbooksReader\EbooksReader\notes\`), keyed by the contents entry, not by text position. If a file is damaged it is renamed to `.json.bad` and the app starts with no notes for that book instead of crashing.
 
@@ -261,7 +264,7 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 - Which link points to an image is detected by a heuristic in `formats/epub.py` (an element with an id right under a short image block counts as the image's caption); an unusual book can fool it
 - The whole book is one Qt document in the main window, so very large books can open and resize slowly
 - PDF: pages are fixed-layout, so font, font size, line spacing and margins don't apply (use zoom); your colors are applied by recoloring the rendered pages, which also tints pictures (`View → PDF: original colors` turns this off)
-- PDF: no search yet, no password-protected files, no OCR for scanned PDFs; a contents entry lands on the top of its page; there is no separate link window or image viewer
+- PDF: search needs a text layer (scanned PDFs can't be searched, there is no OCR) and has no match counter; no password-protected files; a contents entry lands on the top of its page; there is no separate link window or image viewer
 - FB2: formatting is simplified (no paragraph indents); each top-level section is one chapter, and a notes body (footnotes) is one chapter, so a footnote link opens the whole notes list; only the first `.fb2` inside a zip is read
 - Bookmarks, Back positions and reading positions are character offsets in the book text; if a future version converts a book differently, old ones can point a little off
 - Notes, bookmarks and positions are tied to the book's file path: moving or renaming a book file loses them
@@ -270,8 +273,7 @@ Reflowable formats should produce HTML with anchors named `c<chapter>_<id>` and 
 ## Ideas for later
 
 - TXT and other reflowable formats
-- Search inside PDF books
 - Chapter-based loading for large books
-- Drag-and-drop to open a file, Space / Page Down paging
+- Space / Page Down paging
 - Fullscreen reading mode (`F11`)
 - Installer (Inno Setup) with an in-app "Update now" button

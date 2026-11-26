@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.models import TocEntry
+from ..core.registry import find_format
 from ..formats import file_dialog_filter, load_book
 from .bookmarks import Bookmark, load_bookmarks, save_bookmarks
 from .find_bar import FindBar
@@ -94,6 +95,10 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.stack.addWidget(self.text_reader)
         self.stack.addWidget(self.pdf_view)
+        self.setAcceptDrops(True)  # drop a book file on the window to open it
+        for w in (self.text_reader, self.text_reader.viewport(),
+                  self.pdf_view, self.pdf_view.viewport()):
+            w.setAcceptDrops(False)  # so the window gets the drop
         central = QWidget()
         box = QVBoxLayout(central)
         box.setContentsMargins(0, 0, 0, 0)
@@ -484,6 +489,24 @@ class MainWindow(QMainWindow):
             self.act_back.setEnabled(self.reader.can_go_back())
             self.act_forward.setEnabled(self.reader.can_go_forward())
 
+    # ---------- drag and drop ----------
+    @staticmethod
+    def _dropped_book(mime) -> str:
+        for url in mime.urls():
+            if url.isLocalFile() and find_format(url.toLocalFile()):
+                return url.toLocalFile()
+        return ""
+
+    def dragEnterEvent(self, event):
+        if self._dropped_book(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        path = self._dropped_book(event.mimeData())
+        if path:
+            event.acceptProposedAction()
+            self.open_book(path)
+
     # ---------- text / PDF view ----------
     @property
     def is_pdf(self) -> bool:
@@ -501,6 +524,7 @@ class MainWindow(QMainWindow):
             self.reader = self.text_reader
             self.stack.setCurrentWidget(self.text_reader)
             self.reader.set_book(book.html, book.resources, book.image_anchors)
+        self.find_bar.set_reader(self.reader)
         self._update_view_actions()
         self._update_history_actions()
 
@@ -518,14 +542,9 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Zoom {self.pdf_view.zoom_percent()}%", 2000)
 
     def open_find(self) -> None:
-        if self.is_pdf:
-            self.statusBar().showMessage("Search in PDF books is not available yet", 4000)
-            return
         self.find_bar.open()
 
     def _find_step(self, backwards: bool) -> None:
-        if self.is_pdf:
-            return
         (self.find_bar.find_prev if backwards else self.find_bar.find_next)()
 
     # ---------- bookmarks ----------

@@ -70,7 +70,7 @@ class FindBar(QWidget):
 
     # ---------- show / hide ----------
     def open(self) -> None:
-        sel = self.reader.textCursor().selectedText()
+        sel = self.reader.textCursor().selectedText() if hasattr(self.reader, "textCursor") else ""
         if sel and "\u2029" not in sel and len(sel) <= 100:
             self.edit.setText(sel)  # search for the selected text
         self._session_pushed = False
@@ -79,9 +79,12 @@ class FindBar(QWidget):
         self.edit.selectAll()
 
     def close_bar(self) -> None:
-        cur = self.reader.textCursor()
-        cur.clearSelection()
-        self.reader.setTextCursor(cur)
+        if hasattr(self.reader, "clear_search"):
+            self.reader.clear_search()
+        else:
+            cur = self.reader.textCursor()
+            cur.clearSelection()
+            self.reader.setTextCursor(cur)
         self.status.setText("")
         self.hide()
         self.reader.setFocus()
@@ -96,6 +99,29 @@ class FindBar(QWidget):
     def _on_text(self, _text) -> None:
         # incremental search: look from the current hit (or the top of the page)
         self._find(backwards=False, incremental=True)
+
+    def set_reader(self, reader) -> None:
+        """Search another view (text reader or PDF view) from now on."""
+        self.reader = reader
+        self._session_pushed = False
+        self.status.setText("")
+
+    def _find_pdf(self, text: str, backwards: bool, incremental: bool) -> bool:
+        r = self.reader
+        before = r.current_position()
+        result = r.pdf_search(text, backwards, self.case.isChecked(), incremental)
+        if result in ("none", "notext"):
+            self.status.setText(
+                "No text in this PDF (scanned pages can't be searched)"
+                if result == "notext"
+                else "Not found"
+            )
+            return False
+        if not self._session_pushed:
+            self._session_pushed = True
+            r.remember_position(at=before)  # Back returns to where I was
+        self.status.setText("Search wrapped" if result == "wrapped" else "")
+        return True
 
     def _flags(self, backwards: bool):
         flags = QTextDocument.FindFlag(0)
@@ -129,9 +155,13 @@ class FindBar(QWidget):
     def _find(self, backwards: bool, incremental: bool = False) -> bool:
         text = self.edit.text()
         if not text:
+            if hasattr(self.reader, "clear_search"):
+                self.reader.clear_search()
             self.status.setText("")
             return False
         r = self.reader
+        if getattr(r, "supports_pdf_search", False):
+            return self._find_pdf(text, backwards, incremental)
         old = r.textCursor()  # restored if nothing is found: the current hit stays
         self._place_cursor(keep_hit_start=incremental)
         flags = self._flags(backwards)

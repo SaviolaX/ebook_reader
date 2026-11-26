@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..core.registry import find_format
 from ..formats import file_dialog_filter
 from .covers import has_custom_cover, load_cover, remove_custom_cover, set_custom_cover
 from .recent import book_id, get_title, load_recent, remove_recent
@@ -117,6 +118,7 @@ class LauncherWindow(QMainWindow):
         self.settings = settings
         self.setWindowTitle("Ebooks Reader")
         self.resize(940, 660)
+        self.setAcceptDrops(True)  # drop a book file to open it
 
         self.list = QListWidget()
         self.list.setViewMode(QListView.ViewMode.IconMode)
@@ -167,6 +169,24 @@ class LauncherWindow(QMainWindow):
         self.show_check.toggled.connect(lambda v: self.settings.setValue("show_start", v))
 
         self.refresh()
+
+    # ---------- drag and drop ----------
+    @staticmethod
+    def _dropped_book(mime) -> str:
+        for url in mime.urls():
+            if url.isLocalFile() and find_format(url.toLocalFile()):
+                return url.toLocalFile()
+        return ""
+
+    def dragEnterEvent(self, event):
+        if self._dropped_book(event.mimeData()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        path = self._dropped_book(event.mimeData())
+        if path:
+            event.acceptProposedAction()
+            self.bookChosen.emit(path)
 
     # ---------- look ----------
     def _apply_theme(self) -> None:

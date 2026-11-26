@@ -18,7 +18,7 @@ import re
 from bisect import bisect_right
 from collections import OrderedDict
 
-from PySide6.QtCore import QRect, QSize, QTimer, Qt, Signal
+from PySide6.QtCore import QRect, QRectF, QSize, QTimer, Qt, Signal
 from PySide6.QtGui import QColor, QImage, QPainter, QPen
 from PySide6.QtPdf import QPdfDocument
 from PySide6.QtWidgets import QAbstractScrollArea
@@ -29,6 +29,7 @@ GAP = 28  # px between pages (the page number is drawn in it)
 POINT_TO_PX = 96 / 72  # 100% zoom = 96 dpi
 ZOOM_MIN, ZOOM_MAX = 0.1, 8.0
 CACHE_BYTES = 160 * 1024 * 1024  # rendered pages kept in memory
+HIGHLIGHT = QColor(255, 200, 0, 110)  # search hit
 
 _KEY_RE = re.compile(r"p(\d+)")
 _FMT = QImage.Format.Format_ARGB32_Premultiplied
@@ -79,6 +80,7 @@ class PdfView(QAbstractScrollArea):
     zoomChanged = Signal()
 
     HISTORY_LIMIT = 50
+    supports_pdf_search = True  # FindBar checks this
 
     def __init__(self):
         super().__init__()
@@ -103,6 +105,9 @@ class PdfView(QAbstractScrollArea):
         self._forward_backup: list[int] = []
         self._restore_pos: int | None = None
         self._restore_tries = 0
+        self._texts: dict[int, str] = {}  # page -> text, for searching
+        self._hit: tuple[int, int, int] | None = None  # page, start, length
+        self._hit_rects: list[QRectF] = []  # in PDF points
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         # always on: a scrollbar that comes and goes would change the width and the zoom
@@ -141,6 +146,8 @@ class PdfView(QAbstractScrollArea):
         self.doc, self.path, self.page_count = None, "", 0
         self._sizes, self._w, self._h, self._tops = [], [], [], []
         self._cache.clear()
+        self._texts.clear()
+        self._hit, self._hit_rects = None, []
         self._restore_pos = None
         self._clear_history()
         self.verticalScrollBar().setRange(0, 0)
@@ -382,6 +389,83 @@ class PdfView(QAbstractScrollArea):
             return
         super().keyPressEvent(event)
 
+    # ---------- search (needs a text layer) ----------
+    def _text_of(self, page: int) -> str:
+        t = self._texts.get(page)
+        if t is None:
+            raw = self.doc.getAllText(page).text()
+            t = raw.replace("\r", " ").replace("\n", " ")  # same length: indexes stay valid
+            self._texts[page] = t
+        return t
+
+    def clear_search(self) -> None:
+        self._hit, self._hit_rects = None, []
+        self.viewport().update()
+
+    def _hit_visible(self) -> bool:
+        if not self._hit or not self._hit_rects:
+            return False
+        y = (
+            self._tops[self._hit[0]]
+            + self._hit_rects[0].top() * self._scale
+            - self.verticalScrollBar().value()
+        )
+        return 0 <= y < self.viewport().height()
+
+    def pdf_search(self, text: str, backwards: bool, case: bool, incremental: bool) -> str:
+        """Find the next hit. Returns "found", "wrapped", "none" or "notext"."""
+        if not self.doc or not text:
+            return "none"
+        needle = text if case else text.lower()
+        n = self.page_count
+        if self._hit and self._hit_visible():
+            page, start, length = self._hit
+            pos = start if (incremental or backwards) else start + length
+        else:  # start from what is on screen
+            top = self._top_position()
+            page = top // POS_SCALE
+            pos = int(top % POS_SCALE / POS_SCALE * len(self._text_of(page)))
+        found = None
+        for step in range(n + 1):  # n + 1: the start page is searched twice (wrap-around)
+            p = (page + (-step if backwards else step)) % n
+            hay = self._text_of(p)
+            if not case:
+                hay = hay.lower()
+            if backwards:
+                i = hay.rfind(needle, 0, pos) if step == 0 else hay.rfind(needle)
+            else:
+                i = hay.find(needle, pos) if step == 0 else hay.find(needle)
+            if i >= 0:
+                wrapped = (page - step < 0) if backwards else (page + step >= n)
+                found = (p, i, wrapped)
+                break
+        if found is None:
+            has_text = any(self._text_of(i).strip() for i in range(n))
+            return "none" if has_text else "notext"
+        p, i, wrapped = found
+        self._hit = (p, i, len(needle))
+        sel = self.doc.getSelectionAtIndex(p, i, len(needle))
+        self._hit_rects = [poly.boundingRect() for poly in sel.bounds()]
+        self._reveal_hit()
+        self.viewport().update()
+        return "wrapped" if wrapped else "found"
+
+    def _reveal_hit(self) -> None:
+        self._restore_pos = None
+        page = self._hit[0]
+        if not self._hit_rects:
+            self._set_scroll_pos(page * POS_SCALE)
+            return
+        r, s = self._hit_rects[0], self._scale
+        vbar, hbar = self.verticalScrollBar(), self.horizontalScrollBar()
+        vw, vh = self.viewport().width(), self.viewport().height()
+        y = self._tops[page] + r.top() * s
+        if not (vbar.value() + vh // 6 <= y <= vbar.value() + vh * 5 // 6):
+            vbar.setValue(round(y - vh // 3))
+        x = (max(vw, self._total_w) - self._w[page]) // 2 + r.left() * s
+        if x < hbar.value() or x > hbar.value() + vw - 40:
+            hbar.setValue(round(x - vw // 3))
+
     # ---------- painting ----------
     def _page_image(self, i: int, w: int, h: int, dpr: float) -> QImage | None:
         key = (i, w, h, round(dpr * 100), self.original_colors, self._bg, self._fg)
@@ -431,6 +515,13 @@ class PdfView(QAbstractScrollArea):
             img = self._page_image(i, w, h, dpr)
             if img is not None:
                 p.drawImage(rect, img)
+            if self._hit and self._hit[0] == i:
+                s = self._scale
+                for r in self._hit_rects:
+                    p.fillRect(
+                        QRectF(x + r.x() * s, top + r.y() * s, r.width() * s, r.height() * s),
+                        HIGHLIGHT,
+                    )
             p.setPen(QPen(border, 1))
             p.drawRect(rect.adjusted(-1, -1, 0, 0))
             p.setPen(QPen(label_color, 1))
